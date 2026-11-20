@@ -48,6 +48,14 @@ cd web-a && npm ci && npm run dev
 
 The script makes a `blue-tag` branch with one commit, ready to push to a fork.
 
+Tests (Web A ignores its `tests/` folder in git, so create the setup file first):
+
+```bash
+cd web-a && mkdir -p tests && echo 'export {};' > tests/init.ts
+npx cross-env APP_ENV=test npx vitest run src/lib/gramjs/tl/blueTag.test.ts src/global/helpers/blueTag.test.ts   # 9 tests
+cd web-k && npx vitest run src/tests/blueTag.test.ts src/tests/memberTag.test.ts                                  # 18 tests
+```
+
 ### Trying it without server support
 
 The server does not know `channels.editMemberTagPerks` yet. In Web A the UI can be tried locally:
