@@ -1,0 +1,818 @@
+diff --git a/TMessagesProj/src/main/java/org/telegram/messenger/BlueTag.java b/TMessagesProj/src/main/java/org/telegram/messenger/BlueTag.java
+new file mode 100644
+index 0000000..8efc409
+--- /dev/null
++++ b/TMessagesProj/src/main/java/org/telegram/messenger/BlueTag.java
+@@ -0,0 +1,97 @@
++package org.telegram.messenger;
++
++import org.telegram.tgnet.ConnectionsManager;
++import org.telegram.tgnet.TLRPC;
++
++/**
++ * Blue Tag (see SPEC.md): a member tag with perks an admin gave — free messages in a group with
++ * paid messages, a personal slow mode, for a time or a number of messages. Drawn in peer color 5.
++ */
++public final class BlueTag {
++
++    public static final int[] SLOW_MODE_OPTIONS = { 0, 10, 30, 60, 300 };
++    public static final int[] DURATION_OPTIONS = { 86400, 7 * 86400, 0 };
++    public static final int[] LIMIT_OPTIONS = { 10, 50, 0 };
++
++    private BlueTag() {}
++
++    public static boolean isActive(TLRPC.TL_chatMemberTagPerks perks, int now) {
++        if (perks == null) return false;
++        if (perks.until_date != 0 && perks.until_date <= now) return false;
++        return perks.messages_limit == 0 || perks.messages_used < perks.messages_limit;
++    }
++
++    /** My perks in this chat, while they last; delivered on the channel like admin_rights */
++    public static TLRPC.TL_chatMemberTagPerks getMyActivePerks(int account, TLRPC.Chat chat) {
++        if (chat == null || chat.tag_perks == null) return null;
++        final int now = ConnectionsManager.getInstance(account).getCurrentTime();
++        return isActive(chat.tag_perks, now) ? chat.tag_perks : null;
++    }
++
++    public static boolean isFree(int account, TLRPC.Chat chat) {
++        final TLRPC.TL_chatMemberTagPerks perks = getMyActivePerks(account, chat);
++        return perks != null && perks.free_messages;
++    }
++
++    /** -1 when there is no limit */
++    public static int getMessagesLeft(TLRPC.TL_chatMemberTagPerks perks) {
++        if (perks == null || perks.messages_limit == 0) return -1;
++        return Math.max(0, perks.messages_limit - perks.messages_used);
++    }
++
++    /**
++     * One of my messages reached the server: counted at once (the next channel update brings the true
++     * count). Returns the personal slow mode in seconds, 0 for none, or -1 when I have no perks here
++     */
++    public static int onMessageSent(int account, TLRPC.Chat chat) {
++        final TLRPC.TL_chatMemberTagPerks perks = getMyActivePerks(account, chat);
++        if (perks == null) return -1;
++        perks.messages_used++;
++        return perks.slowmode_seconds;
++    }
++
++    public static TLRPC.TL_chatMemberTagPerks make(boolean freeMessages, int slowModeSeconds, int duration, int messagesLimit, int now) {
++        final TLRPC.TL_chatMemberTagPerks perks = new TLRPC.TL_chatMemberTagPerks();
++        perks.free_messages = freeMessages;
++        perks.slowmode_seconds = slowModeSeconds;
++        perks.until_date = duration != 0 ? now + duration : 0;
++        perks.messages_limit = messagesLimit;
++        return perks;
++    }
++
++    /** Whether I may give this member perks: a supergroup's admin who can ban, for a member who is not an admin */
++    public static boolean canEdit(TLRPC.Chat chat, TLRPC.User user, boolean admin, boolean owner) {
++        return ChatObject.isChannel(chat) && chat.megagroup && !admin && !owner
++            && user != null && !UserObject.isUserSelf(user) && ChatObject.canBlockUsers(chat);
++    }
++
++    /** A member's perks, from the participants the full chat keeps */
++    public static TLRPC.TL_chatMemberTagPerks findMemberPerks(int account, long chatId, long userId) {
++        final TLRPC.ChatFull chatFull = MessagesController.getInstance(account).getChatFull(chatId);
++        if (chatFull == null || chatFull.participants == null || chatFull.participants.participants == null) return null;
++        for (TLRPC.ChatParticipant participant : chatFull.participants.participants) {
++            if (participant instanceof TLRPC.TL_chatChannelParticipant && participant.user_id == userId) {
++                final TLRPC.ChannelParticipant channelParticipant = ((TLRPC.TL_chatChannelParticipant) participant).channelParticipant;
++                return channelParticipant != null ? channelParticipant.tag_perks : null;
++            }
++        }
++        return null;
++    }
++
++    /** Gives a member perks, or takes them away with perks == null */
++    public static void edit(int account, TLRPC.Chat chat, TLRPC.User user, TLRPC.TL_chatMemberTagPerks perks, Utilities.Callback<TLRPC.TL_error> done) {
++        final MessagesController messagesController = MessagesController.getInstance(account);
++        final TLRPC.TL_channels_editMemberTagPerks req = new TLRPC.TL_channels_editMemberTagPerks();
++        req.channel = MessagesController.getInputChannel(chat);
++        req.participant = MessagesController.getInputPeer(user);
++        req.perks = perks;
++        ConnectionsManager.getInstance(account).sendRequestTyped(req, AndroidUtilities::runOnUIThread, (res, err) -> {
++            if (res != null) {
++                messagesController.processUpdates(res, false);
++            }
++            if (done != null) {
++                done.run(err);
++            }
++        });
++    }
++}
+diff --git a/TMessagesProj/src/main/java/org/telegram/messenger/MessagesController.java b/TMessagesProj/src/main/java/org/telegram/messenger/MessagesController.java
+index ec76835..87e6a18 100644
+--- a/TMessagesProj/src/main/java/org/telegram/messenger/MessagesController.java
++++ b/TMessagesProj/src/main/java/org/telegram/messenger/MessagesController.java
+@@ -7243,6 +7243,10 @@ public class MessagesController extends BaseController implements NotificationCe
+             if (ChatObject.isMonoForum(chat) && ChatObject.canManageMonoForum(currentAccount, chat)) {
+                 return 0;
+             }
++            // Blue Tag: a member given free messages writes without paying
++            if (BlueTag.isFree(currentAccount, chat)) {
++                return 0;
++            }
+ 
+             TLRPC.ChatFull chatFull = getChatFull(-did);
+             if (chatFull != null) {
+diff --git a/TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java b/TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java
+index 7dfc100..70f83c6 100644
+--- a/TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java
++++ b/TMessagesProj/src/main/java/org/telegram/tgnet/TLRPC.java
+@@ -35957,6 +35957,7 @@ public class TLRPC {
+     }
+ 
+     public static abstract class ChannelParticipant extends TLObject {
++        public TL_chatMemberTagPerks tag_perks; // Blue Tag
+         public Peer peer;
+         public long kicked_by;
+         public int date;
+@@ -36006,6 +36007,7 @@ public class TLRPC {
+                     result = new TL_channelParticipantAdmin();
+                     break;
+                 case TL_channelParticipant.constructor:
++                case 0x1bd54456: // layer 233, before Blue Tag
+                     result = new TL_channelParticipant();
+                     break;
+                 case TL_channelParticipant_layer222.constructor:
+@@ -36024,6 +36026,7 @@ public class TLRPC {
+                     result = new TL_channelParticipantAdmin_layer92();
+                     break;
+                 case TL_channelParticipantSelf.constructor:
++                case 0xa9478a1a: // layer 233, before Blue Tag
+                     result = new TL_channelParticipantSelf();
+                     break;
+                 case TL_channelParticipantSelf_layer222.constructor:
+@@ -36065,7 +36068,7 @@ public class TLRPC {
+     }
+ 
+     public static class TL_channelParticipant extends ChannelParticipant {
+-        public static final int constructor = 0x1BD54456;
++        public static final int constructor = 0xB8123BC8; // Blue Tag (was 0x1BD54456)
+ 
+         public void readParams(InputSerializedData stream, boolean exception) {
+             flags = stream.readInt32(exception);
+@@ -36078,11 +36081,15 @@ public class TLRPC {
+             if (hasFlag(flags, FLAG_2)) {
+                 rank = stream.readString(exception);
+             }
++            if (hasFlag(flags, FLAG_3)) {
++                tag_perks = TL_chatMemberTagPerks.TLdeserialize(stream, stream.readInt32(exception), exception);
++            }
+         }
+ 
+         public void serializeToStream(OutputSerializedData stream) {
+             stream.writeInt32(constructor);
+             flags = setFlag(flags, FLAG_2, rank != null);
++            flags = setFlag(flags, FLAG_3, tag_perks != null);
+             stream.writeInt32(flags);
+             stream.writeInt64(peer.user_id);
+             stream.writeInt32(date);
+@@ -36092,6 +36099,9 @@ public class TLRPC {
+             if (hasFlag(flags, FLAG_2)) {
+                 stream.writeString(rank);
+             }
++            if (hasFlag(flags, FLAG_3)) {
++                tag_perks.serializeToStream(stream);
++            }
+         }
+     }
+ 
+@@ -36136,7 +36146,7 @@ public class TLRPC {
+     }
+ 
+     public static class TL_channelParticipantSelf extends ChannelParticipant {
+-        public static final int constructor = 0xA9478A1A;
++        public static final int constructor = 0x50CAD9EE; // Blue Tag (was 0xA9478A1A)
+ 
+         public void readParams(InputSerializedData stream, boolean exception) {
+             flags = stream.readInt32(exception);
+@@ -36150,12 +36160,16 @@ public class TLRPC {
+             if (hasFlag(flags, FLAG_2)) {
+                 rank = stream.readString(exception);
+             }
++            if (hasFlag(flags, FLAG_3)) {
++                tag_perks = TL_chatMemberTagPerks.TLdeserialize(stream, stream.readInt32(exception), exception);
++            }
+         }
+ 
+         public void serializeToStream(OutputSerializedData stream) {
+             stream.writeInt32(constructor);
+             flags = setFlag(flags, FLAG_0, via_invite);
+             flags = setFlag(flags, FLAG_2, rank != null);
++            flags = setFlag(flags, FLAG_3, tag_perks != null);
+             stream.writeInt32(flags);
+             stream.writeInt64(user_id);
+             stream.writeInt64(inviter_id);
+@@ -36166,6 +36180,9 @@ public class TLRPC {
+             if (hasFlag(flags, FLAG_2)) {
+                 stream.writeString(rank);
+             }
++            if (hasFlag(flags, FLAG_3)) {
++                tag_perks.serializeToStream(stream);
++            }
+         }
+     }
+ 
+@@ -38426,6 +38443,9 @@ public class TLRPC {
+                 case TL_channelAdminLogEventActionSendMessage.constructor:
+                     result = new TL_channelAdminLogEventActionSendMessage();
+                     break;
++                case TL_channelAdminLogEventActionParticipantEditTagPerks.constructor:
++                    result = new TL_channelAdminLogEventActionParticipantEditTagPerks();
++                    break;
+                 case TL_channelAdminLogEventActionParticipantEditRank.constructor:
+                     result = new TL_channelAdminLogEventActionParticipantEditRank();
+                     break;
+@@ -38984,6 +39004,107 @@ public class TLRPC {
+         }
+     }
+ 
++    // Blue Tag (see SPEC.md): perks of a member tag
++    public static class TL_chatMemberTagPerks extends TLObject {
++        public static final int constructor = 0x78b4ccb0;
++
++        public int flags;
++        public boolean free_messages;
++        public int slowmode_seconds;
++        public int until_date;
++        public int messages_limit;
++        public int messages_used;
++
++        public static TL_chatMemberTagPerks TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
++            if (TL_chatMemberTagPerks.constructor != constructor) {
++                if (exception) {
++                    throw new RuntimeException(String.format("can't parse magic %x in TL_chatMemberTagPerks", constructor));
++                }
++                return null;
++            }
++            TL_chatMemberTagPerks result = new TL_chatMemberTagPerks();
++            result.readParams(stream, exception);
++            return result;
++        }
++
++        @Override
++        public void readParams(InputSerializedData stream, boolean exception) {
++            flags = stream.readInt32(exception);
++            free_messages = hasFlag(flags, FLAG_0);
++            if (hasFlag(flags, FLAG_1)) {
++                slowmode_seconds = stream.readInt32(exception);
++            }
++            if (hasFlag(flags, FLAG_2)) {
++                until_date = stream.readInt32(exception);
++            }
++            if (hasFlag(flags, FLAG_3)) {
++                messages_limit = stream.readInt32(exception);
++            }
++            if (hasFlag(flags, FLAG_4)) {
++                messages_used = stream.readInt32(exception);
++            }
++        }
++
++        @Override
++        public void serializeToStream(OutputSerializedData stream) {
++            stream.writeInt32(constructor);
++            flags = setFlag(flags, FLAG_0, free_messages);
++            flags = setFlag(flags, FLAG_1, slowmode_seconds != 0);
++            flags = setFlag(flags, FLAG_2, until_date != 0);
++            flags = setFlag(flags, FLAG_3, messages_limit != 0);
++            flags = setFlag(flags, FLAG_4, messages_used != 0);
++            stream.writeInt32(flags);
++            if (hasFlag(flags, FLAG_1)) {
++                stream.writeInt32(slowmode_seconds);
++            }
++            if (hasFlag(flags, FLAG_2)) {
++                stream.writeInt32(until_date);
++            }
++            if (hasFlag(flags, FLAG_3)) {
++                stream.writeInt32(messages_limit);
++            }
++            if (hasFlag(flags, FLAG_4)) {
++                stream.writeInt32(messages_used);
++            }
++        }
++    }
++
++    public static class TL_channelAdminLogEventActionParticipantEditTagPerks extends ChannelAdminLogEventAction {
++        public static final int constructor = 0x4128ea6d;
++
++        public int flags;
++        public long user_id;
++        public TL_chatMemberTagPerks prev_perks;
++        public TL_chatMemberTagPerks new_perks;
++
++        @Override
++        public void readParams(InputSerializedData stream, boolean exception) {
++            flags = stream.readInt32(exception);
++            user_id = stream.readInt64(exception);
++            if (hasFlag(flags, FLAG_0)) {
++                prev_perks = TL_chatMemberTagPerks.TLdeserialize(stream, stream.readInt32(exception), exception);
++            }
++            if (hasFlag(flags, FLAG_1)) {
++                new_perks = TL_chatMemberTagPerks.TLdeserialize(stream, stream.readInt32(exception), exception);
++            }
++        }
++
++        @Override
++        public void serializeToStream(OutputSerializedData stream) {
++            stream.writeInt32(constructor);
++            flags = setFlag(flags, FLAG_0, prev_perks != null);
++            flags = setFlag(flags, FLAG_1, new_perks != null);
++            stream.writeInt32(flags);
++            stream.writeInt64(user_id);
++            if (hasFlag(flags, FLAG_0)) {
++                prev_perks.serializeToStream(stream);
++            }
++            if (hasFlag(flags, FLAG_1)) {
++                new_perks.serializeToStream(stream);
++            }
++        }
++    }
++
+     public static class TL_channelAdminLogEventActionParticipantEditRank extends ChannelAdminLogEventAction {
+         public static final int constructor = 0x5806b4ec;
+ 
+@@ -39594,6 +39715,7 @@ public class TLRPC {
+     }
+ 
+     public static abstract class Chat extends TLObject {
++        public TL_chatMemberTagPerks tag_perks; // Blue Tag: my perks in this chat
+         public long id;
+         public String title;
+         public int date;
+@@ -39683,6 +39805,7 @@ public class TLRPC {
+                 case TL_channel_layer104.constructor:
+                     return new TL_channel_layer104();
+                 case TL_channel.constructor:
++                case 0x7ad15240: // layer 233, before Blue Tag: the same fields without tag_perks
+                     return new TL_channel();
+                 case TL_channel_layer232.constructor:
+                     return new TL_channel_layer232();
+@@ -40113,7 +40236,7 @@ public class TLRPC {
+     }
+ 
+     public static class TL_channel extends Chat {
+-        public static final int constructor = 0x7ad15240;
++        public static final int constructor = 0x6506067c; // Blue Tag (was 0x7ad15240)
+ 
+         public void readParams(InputSerializedData stream, boolean exception) {
+             flags = stream.readInt32(exception);
+@@ -40209,6 +40332,9 @@ public class TLRPC {
+             if (hasFlag(flags2, FLAG_22)) {
+                 pinned_msg_id = stream.readInt32(exception);
+             }
++            if (hasFlag(flags2, FLAG_24)) {
++                tag_perks = TL_chatMemberTagPerks.TLdeserialize(stream, stream.readInt32(exception), exception);
++            }
+         }
+ 
+         public void serializeToStream(OutputSerializedData stream) {
+@@ -40244,6 +40370,7 @@ public class TLRPC {
+             flags2 = setFlag(flags2, FLAG_19, forum_tabs);
+             flags2 = setFlag(flags2, FLAG_21, in_news);
+             flags2 = setFlag(flags2, FLAG_23, forum_sidebar);
++            flags2 = setFlag(flags2, FLAG_24, tag_perks != null);
+             stream.writeInt32(flags2);
+             stream.writeInt64(id);
+             if (hasFlag(flags, FLAG_13)) {
+@@ -40306,6 +40433,9 @@ public class TLRPC {
+             if (hasFlag(flags2, FLAG_22)) {
+                 stream.writeInt32(pinned_msg_id);
+             }
++            if (hasFlag(flags2, FLAG_24)) {
++                tag_perks.serializeToStream(stream);
++            }
+         }
+     }
+ 
+@@ -59400,6 +59530,7 @@ public class TLRPC {
+         public int schedule_repeat_period;
+         public String summary_from_language;
+         public String from_rank;
++        public boolean from_rank_blue; // Blue Tag
+         public TLRPC.Peer guestchat_via_from;
+         public TL_iv.RichMessage rich_message;
+         public int send_state = 0; //custom
+@@ -59500,6 +59631,7 @@ public class TLRPC {
+                 case 0x85d6cbe2:
+                     return new TL_legacy_message.TL_message_layer135();
+                 case TL_message.constructor:
++                case 0x7600b9d3: // layer 233, before Blue Tag
+                     return new TL_message();
+                 case TL_legacy_message.TL_message_layer226.constructor:
+                     return new TL_legacy_message.TL_message_layer226();
+@@ -60185,7 +60317,7 @@ public class TLRPC {
+     }
+ 
+     public static class TL_message extends Message {
+-        public static final int constructor = 0x7600b9d3;
++        public static final int constructor = 0xb917471c; // Blue Tag (was 0x7600b9d3)
+ 
+         public void readParams(InputSerializedData stream, boolean exception) {
+             flags = stream.readInt32(exception);
+@@ -60205,6 +60337,7 @@ public class TLRPC {
+             video_processing_pending = hasFlag(flags2, FLAG_4);
+             paid_suggested_post_stars = hasFlag(flags2, FLAG_8);
+             paid_suggested_post_ton = hasFlag(flags2, FLAG_9);
++            from_rank_blue = hasFlag(flags2, FLAG_20);
+             id = stream.readInt32(exception);
+             if (hasFlag(flags, FLAG_8)) {
+                 from_id = Peer.TLdeserialize(stream, stream.readInt32(exception), exception);
+@@ -60327,6 +60460,7 @@ public class TLRPC {
+             flags2 = setFlag(flags2, FLAG_8, paid_suggested_post_stars);
+             flags2 = setFlag(flags2, FLAG_9, paid_suggested_post_ton);
+             flags2 = setFlag(flags2, FLAG_12, from_rank != null);
++            flags2 = setFlag(flags2, FLAG_20, from_rank_blue);
+             flags2 = setFlag(flags2, FLAG_13, rich_message != null);
+             flags2 = setFlag(flags2, FLAG_19, guestchat_via_from != null);
+             stream.writeInt32(flags2);
+@@ -71543,6 +71677,33 @@ public class TLRPC {
+         }
+     }
+ 
++    // Blue Tag: gives a member perks, or takes them away when perks == null
++    public static class TL_channels_editMemberTagPerks extends TLMethod<Updates> {
++        public static final int constructor = 0x72de3d23;
++
++        public int flags;
++        public InputChannel channel;
++        public InputPeer participant;
++        public TL_chatMemberTagPerks perks;
++
++        @Override
++        public Updates deserializeResponseT(InputSerializedData stream, int constructor, boolean exception) {
++            return Updates.TLdeserialize(stream, constructor, exception);
++        }
++
++        @Override
++        public void serializeToStream(OutputSerializedData stream) {
++            stream.writeInt32(constructor);
++            flags = setFlag(flags, FLAG_0, perks != null);
++            stream.writeInt32(flags);
++            channel.serializeToStream(stream);
++            participant.serializeToStream(stream);
++            if (hasFlag(flags, FLAG_0)) {
++                perks.serializeToStream(stream);
++            }
++        }
++    }
++
+     public static class TL_inputMessageReadMetric extends TLObject {
+         public static final int constructor = 0x402b4495;
+ 
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatMessageCell.java b/TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatMessageCell.java
+index 5dc090f..20f82b2 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatMessageCell.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatMessageCell.java
+@@ -773,6 +773,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
+         default String getAdminRank(long uid) {
+             return null;
+         }
++        // Blue Tag: a member's tag with perks is drawn blue on a pill, as an admin's is green
++        default boolean isBlueTag(long uid) {
++            return false;
++        }
+ 
+         default boolean needPlayMessage(ChatMessageCell cell, MessageObject messageObject, boolean muted) {
+             return false;
+@@ -1609,7 +1613,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
+ 
+     StaticLayout nameLayout;
+     private int nameLayoutWidth;
+-    boolean adminLayoutIsAdmin, adminLayoutIsOwner, adminLayoutIsTag;
++    boolean adminLayoutIsAdmin, adminLayoutIsOwner, adminLayoutIsTag, adminLayoutIsBlue;
+     private StaticLayout adminLayout;
+     private RectF adminLayoutRect = new RectF();
+     private ButtonBounce adminLayoutBounce;
+@@ -6477,7 +6481,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
+             adminLayout = null;
+             ephemeralLayout = null;
+             ephemeralWidth = 0;
+-            adminLayoutIsAdmin = adminLayoutIsOwner = adminLayoutIsTag = false;
++            adminLayoutIsAdmin = adminLayoutIsOwner = adminLayoutIsTag = adminLayoutIsBlue = false;
+             boostCounterBounds = null;
+             boostCounterSpan = null;
+             checkOnlyButtonPressed = false;
+@@ -16019,7 +16023,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
+                 nameWidth -= topicButton.width + dp(8);
+             }
+             int adminWidth = 0;
+-            boolean isAdmin = false, isOwner = false, isTag = false;
++            boolean isAdmin = false, isOwner = false, isTag = false, isBlue = false;
+             SpannableStringBuilder adminString = null;
+             String adminLabel;
+             if (messageObject.isWelcomeMessage()) {
+@@ -16037,6 +16041,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
+                     isTag = true;
+                     isOwner = delegate.isOwner(currentUser != null ? currentUser.id : currentChat.id);
+                     isAdmin = delegate.isAdmin(currentUser != null ? currentUser.id : currentChat.id);
++                    if (!isOwner && !isAdmin && !adminLabel.isEmpty() && (messageObject.messageOwner.from_rank_blue || delegate.isBlueTag(currentUser != null ? currentUser.id : currentChat.id))) {
++                        isBlue = true;
++                        isAdmin = true; // drawn on a pill, as an admin's tag
++                    }
+                     if (adminLabel.isEmpty()) {
+                         adminLabel = getString(isOwner ? R.string.ChatTagOwner : R.string.ChatTagAdmin);
+                     }
+@@ -16179,6 +16187,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
+                     adminLayout = new StaticLayout(adminString, Theme.chat_adminPaint, adminWidth + dp(2), Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
+                     adminLayoutIsAdmin = isAdmin || isOwner;
+                     adminLayoutIsOwner = isOwner;
++                    adminLayoutIsBlue = isBlue;
+                     adminLayoutIsTag = isTag;
+                     if (!drawNameAvatar || isCompactMode()) {
+                         nameWidth += adminLayout.getLineWidth(0) + (adminLayoutIsAdmin ? dp(12) : 0) + dp(8);
+@@ -16190,6 +16199,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
+                     adminLayout = null;
+                     adminLayoutIsAdmin = false;
+                     adminLayoutIsOwner = false;
++                    adminLayoutIsBlue = false;
+                     adminLayoutIsTag = false;
+                     boostCounterBounds = null;
+                 }
+@@ -19495,6 +19505,8 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
+                 } else {
+                     if (adminLayoutIsOwner) {
+                         color = getThemedColor(Theme.key_chat_tagCreator);
++                    } else if (adminLayoutIsBlue) {
++                        color = getThemedColor(Theme.keys_avatar_nameInMessage[5]);
+                     } else if (adminLayoutIsAdmin) {
+                         color = getThemedColor(Theme.key_chat_tagAdmin);
+                     } else {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java
+index 266e570..a9701cf 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/ChatActivityEnterView.java
+@@ -123,6 +123,7 @@ import org.telegram.messenger.ApplicationLoader;
+ import org.telegram.messenger.BirthdayController;
+ import org.telegram.messenger.BotForumHelper;
+ import org.telegram.messenger.BotWebViewVibrationEffect;
++import org.telegram.messenger.BlueTag;
+ import org.telegram.messenger.BuildVars;
+ import org.telegram.messenger.ChatObject;
+ import org.telegram.messenger.ContactsController;
+@@ -6839,6 +6840,9 @@ public class ChatActivityEnterView extends FrameLayout implements
+         if (ChatObject.isIgnoredChatRestrictionsForBoosters(chatInfo)) {
+             return;
+         }
++        if (chatInfo != null && BlueTag.getMyActivePerks(currentAccount, accountInstance.getMessagesController().getChat(chatInfo.id)) != null) {
++            return; // Blue Tag: the personal slow mode is counted on send
++        }
+         setSlowModeTimer(chatInfo.slowmode_next_send_date);
+     }
+ 
+@@ -6958,6 +6962,11 @@ public class ChatActivityEnterView extends FrameLayout implements
+             messageEditText.setHintText(replyingMessageObject.messageOwner.reply_markup.placeholder, animated);
+         } else if (editingMessageObject != null) {
+             messageEditText.setHintText(editingCaption ? getString(R.string.Caption) : getString(R.string.TypeMessage));
++        } else if (DialogObject.isChatDialog(dialog_id) && BlueTag.isFree(currentAccount, accountInstance.getMessagesController().getChat(-dialog_id))
++                && accountInstance.getMessagesController().getChat(-dialog_id).send_paid_messages_stars > 0) {
++            // Blue Tag: free messages, and how many are left
++            final int messagesLeft = BlueTag.getMessagesLeft(BlueTag.getMyActivePerks(currentAccount, accountInstance.getMessagesController().getChat(-dialog_id)));
++            messageEditText.setHintText(messagesLeft >= 0 ? LocaleController.formatString(R.string.BlueTagPlaceholderLeft, messagesLeft) : getString(R.string.BlueTagPlaceholder), animated);
+         } else if (paidMessagesStarsPrice > 0) {
+             messageEditText.setHintText(StarsIntroActivity.replaceStars(LocaleController.formatString(R.string.TypeMessageForStars, LocaleController.formatNumber((int) paidMessagesStarsPrice, ',')), spans));
+             if (spans[0] != null) {
+@@ -13780,6 +13789,17 @@ public class ChatActivityEnterView extends FrameLayout implements
+             }
+             long did = (Long) args[3];
+             Integer newMsgId = (Integer) args[1];
++            if (did == dialog_id && did < 0 && !MessageObject.isEphemeralMessageId(newMsgId)) {
++                // Blue Tag: my personal slow mode stands for the chat's
++                final int personalSlowMode = BlueTag.onMessageSent(currentAccount, accountInstance.getMessagesController().getChat(-did));
++                if (personalSlowMode >= 0) {
++                    if (personalSlowMode > 0) {
++                        setSlowModeTimer(ConnectionsManager.getInstance(currentAccount).getCurrentTime() + personalSlowMode);
++                    }
++                    updateFieldHint(true);
++                    return;
++                }
++            }
+             if (did == dialog_id && info != null && info.slowmode_seconds != 0 && !MessageObject.isEphemeralMessageId(newMsgId)) {
+                 TLRPC.Chat chat = accountInstance.getMessagesController().getChat(info.id);
+                 if (chat != null && !ChatObject.hasAdminRights(chat) && !ChatObject.isIgnoredChatRestrictionsForBoosters(chat)) {
+diff --git a/TMessagesProj/src/main/java/org/telegram/ui/Components/TagEditCell.java b/TMessagesProj/src/main/java/org/telegram/ui/Components/TagEditCell.java
+index 7f2b5ea..f820222 100644
+--- a/TMessagesProj/src/main/java/org/telegram/ui/Components/TagEditCell.java
++++ b/TMessagesProj/src/main/java/org/telegram/ui/Components/TagEditCell.java
+@@ -33,6 +33,7 @@ import androidx.annotation.NonNull;
+ import androidx.annotation.Nullable;
+ 
+ import org.telegram.messenger.AndroidUtilities;
++import org.telegram.messenger.BlueTag;
+ import org.telegram.messenger.BotWebViewVibrationEffect;
+ import org.telegram.messenger.ChatObject;
+ import org.telegram.messenger.FileLog;
+@@ -49,7 +50,9 @@ import org.telegram.ui.ActionBar.BottomSheet;
+ import org.telegram.ui.ActionBar.Theme;
+ import org.telegram.ui.ActionBar.ThemeBind;
+ import org.telegram.ui.Cells.ChatMessageCell;
++import org.telegram.ui.Cells.HeaderCell;
+ import org.telegram.ui.Cells.PollEditTextCell;
++import org.telegram.ui.Cells.TextCheckCell;
+ import org.telegram.ui.Cells.TextInfoPrivacyCell;
+ import org.telegram.ui.GradientClip;
+ import org.telegram.ui.LaunchActivity;
+@@ -72,6 +75,7 @@ public class TagEditCell extends LinearLayout {
+ 
+     private MessageObject messageObject;
+     private boolean isAdmin, isOwner;
++    private boolean isBlue; // Blue Tag preview
+     private Utilities.Callback<String> onRankEdited;
+     private boolean ignoreEdit;
+ 
+@@ -187,6 +191,10 @@ public class TagEditCell extends LinearLayout {
+                 return isOwner;
+             }
+             @Override
++            public boolean isBlueTag(long uid) {
++                return isBlue;
++            }
++            @Override
+             public String getAdminRank(long uid) {
+                 String rank = editText.getText().toString().trim();
+                 if (rank.length() > 16) {
+@@ -212,6 +220,15 @@ public class TagEditCell extends LinearLayout {
+         return true;
+     }
+ 
++    public void setBlue(boolean blue) {
++        if (isBlue == blue) return;
++        isBlue = blue;
++        if (messageObject != null) {
++            messageObject.forceUpdate = true;
++            messageCell.setMessageObject(messageObject, null, false, false, false);
++        }
++    }
++
+     public void set(TLRPC.User user, String rank, boolean admin, boolean owner, Utilities.Callback<String> onRankEdited) {
+         final TLRPC.TL_message message = new TLRPC.TL_message();
+         message.from_id = MessagesController.getInstance(currentAccount).getPeer(user.id);
+@@ -319,6 +336,64 @@ public class TagEditCell extends LinearLayout {
+         infoCell.setText(UserObject.isUserSelf(user) ? getString(R.string.MemberTagSelfInfo) : formatString(R.string.MemberTagTheirInfo, UserObject.getUserName(user)));
+         layout.addView(infoCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.FILL_HORIZONTAL, 0, 0, 0, 0));
+ 
++        // Blue Tag: free messages and a personal slow mode, for a time or a number of messages
++        final boolean canEditPerks = BlueTag.canEdit(chat, user, admin, owner);
++        final int now = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
++        final TLRPC.TL_chatMemberTagPerks oldPerks = canEditPerks ? BlueTag.findMemberPerks(currentAccount, -dialogId, user.id) : null;
++        final boolean hadPerks = BlueTag.isActive(oldPerks, now);
++        final boolean[] blue = { hadPerks };
++        final boolean[] free = { !hadPerks || oldPerks.free_messages };
++        final int[] slowMode = { hadPerks ? indexOf(BlueTag.SLOW_MODE_OPTIONS, oldPerks.slowmode_seconds, 2) : 2 };
++        final int[] duration = { hadPerks ? (oldPerks.until_date == 0 ? 2 : (oldPerks.until_date - now > 86400 ? 1 : 0)) : 1 };
++        final int[] limit = { hadPerks ? indexOf(BlueTag.LIMIT_OPTIONS, oldPerks.messages_limit, 1) : 1 };
++        final String initialPerks = perksKey(blue[0], free[0], slowMode[0], duration[0], limit[0]);
++        if (canEditPerks) {
++            final LinearLayout perksLayout = new LinearLayout(context);
++            perksLayout.setOrientation(LinearLayout.VERTICAL);
++            final LinearLayout optionsLayout = new LinearLayout(context);
++            optionsLayout.setOrientation(LinearLayout.VERTICAL);
++            optionsLayout.setVisibility(blue[0] ? View.VISIBLE : View.GONE);
++
++            final TextCheckCell blueCell = new TextCheckCell(context, resourcesProvider);
++            ThemeBind.backgroundColor(blueCell, Theme.key_windowBackgroundWhite, resourcesProvider);
++            blueCell.setTextAndCheck(getString(R.string.BlueTag), blue[0], true);
++            blueCell.setOnClickListener(v -> {
++                blue[0] = !blue[0];
++                blueCell.setChecked(blue[0]);
++                cell.setBlue(blue[0]);
++                optionsLayout.setVisibility(blue[0] ? View.VISIBLE : View.GONE);
++            });
++            perksLayout.addView(blueCell);
++
++            final TextCheckCell freeCell = new TextCheckCell(context, resourcesProvider);
++            ThemeBind.backgroundColor(freeCell, Theme.key_windowBackgroundWhite, resourcesProvider);
++            freeCell.setTextAndCheck(getString(R.string.BlueTagFreeMessages), free[0], false);
++            freeCell.setOnClickListener(v -> {
++                free[0] = !free[0];
++                freeCell.setChecked(free[0]);
++            });
++            optionsLayout.addView(freeCell);
++
++            final TextInfoPrivacyCell perksInfo = new TextInfoPrivacyCell(context, 22, resourcesProvider);
++            perksInfo.setText(formatString(R.string.BlueTagInfo, UserObject.getFirstName(user)));
++            optionsLayout.addView(perksInfo);
++
++            final String[] slowModeLabels = new String[BlueTag.SLOW_MODE_OPTIONS.length];
++            for (int i = 0; i < slowModeLabels.length; i++) {
++                final int seconds = BlueTag.SLOW_MODE_OPTIONS[i];
++                slowModeLabels[i] = seconds == 0 ? getString(R.string.BlueTagOff) : seconds < 60 ? formatString(R.string.BlueTagSecondsShort, seconds) : formatString(R.string.BlueTagMinutesShort, seconds / 60);
++            }
++            addChooser(context, optionsLayout, getString(R.string.BlueTagSlowMode), slowMode, resourcesProvider, slowModeLabels);
++            addChooser(context, optionsLayout, getString(R.string.BlueTagDuration), duration, resourcesProvider,
++                getString(R.string.BlueTagDay1), getString(R.string.BlueTagDays7), getString(R.string.BlueTagForever));
++            addChooser(context, optionsLayout, getString(R.string.BlueTagLimit), limit, resourcesProvider,
++                "10", "50", getString(R.string.BlueTagNoLimit));
++
++            perksLayout.addView(optionsLayout);
++            layout.addView(perksLayout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.FILL_HORIZONTAL, 0, 0, 0, 0));
++            cell.setBlue(blue[0]);
++        }
++
+         layout.addView(button, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, Gravity.FILL_HORIZONTAL, 14, 19, 14, 12));
+ 
+         final BottomSheet sheet = b.create();
+@@ -334,6 +409,35 @@ public class TagEditCell extends LinearLayout {
+ 
+             AndroidUtilities.hideKeyboard(cell.editTextCell);
+ 
++            final boolean perksChanged = canEditPerks && !initialPerks.equals(perksKey(blue[0], free[0], slowMode[0], duration[0], limit[0]));
++            if (perksChanged && blue[0] && TextUtils.isEmpty(currentRank[0])) {
++                // TAG_PERKS_RANK_EMPTY: the perks go with a tag
++                button.setLoading(false);
++                AndroidUtilities.shakeViewSpring(cell.editTextCell, shakeDpStatic = -shakeDpStatic);
++                return;
++            }
++            final Runnable savePerks = () -> {
++                if (!perksChanged) return;
++                final TLRPC.TL_chatMemberTagPerks perks = blue[0] ? BlueTag.make(free[0], BlueTag.SLOW_MODE_OPTIONS[slowMode[0]],
++                    BlueTag.DURATION_OPTIONS[duration[0]], BlueTag.LIMIT_OPTIONS[limit[0]], ConnectionsManager.getInstance(currentAccount).getCurrentTime()) : null;
++                BlueTag.edit(currentAccount, chat, user, perks, err -> {
++                    final BaseFragment fragment = LaunchActivity.getSafeLastFragment();
++                    if (err == null && perks != null && fragment != null) {
++                        BulletinFactory.of(fragment).createSimpleBulletin(R.raw.contact_check, getString(R.string.BlueTagSaved), currentRank[0]).wrapContent().show();
++                    } else if (err != null && fragment != null) {
++                        BulletinFactory.of(fragment).showForError(err);
++                    }
++                });
++            };
++
++            if (rank != null && rank.equals(currentRank[0]) || rank == null && TextUtils.isEmpty(currentRank[0])) {
++                if (perksChanged) {
++                    savePerks.run();
++                    sheet.dismiss();
++                    return;
++                }
++            }
++
+             final TLRPC.TL_messages_editChatParticipantRank req = new TLRPC.TL_messages_editChatParticipantRank();
+             req.peer = m.getInputPeer(dialogId);
+             req.participant = MessagesController.getInputPeer(user);
+@@ -342,6 +446,7 @@ public class TagEditCell extends LinearLayout {
+                 if (res != null) {
+                     m.updateRank(-dialogId, user.id, req.rank);
+                     m.processUpdates(res, false);
++                    savePerks.run();
+                     sheet.dismiss();
+ 
+                     final BaseFragment lastFragment = LaunchActivity.getSafeLastFragment();
+@@ -369,6 +474,31 @@ public class TagEditCell extends LinearLayout {
+         });
+     }
+ 
++    private static float shakeDpStatic = -6;
++
++    private static int indexOf(int[] options, int value, int fallback) {
++        for (int i = 0; i < options.length; i++) {
++            if (options[i] == value) return i;
++        }
++        return fallback;
++    }
++
++    private static String perksKey(boolean blue, boolean free, int slowMode, int duration, int limit) {
++        return blue + ":" + free + ":" + slowMode + ":" + duration + ":" + limit;
++    }
++
++    private static void addChooser(Context context, LinearLayout parent, String title, int[] selected, Theme.ResourcesProvider resourcesProvider, String... options) {
++        final HeaderCell header = new HeaderCell(context, resourcesProvider);
++        ThemeBind.backgroundColor(header, Theme.key_windowBackgroundWhite, resourcesProvider);
++        header.setText(title);
++        parent.addView(header);
++        final SlideChooseView chooser = new SlideChooseView(context, resourcesProvider);
++        ThemeBind.backgroundColor(chooser, Theme.key_windowBackgroundWhite, resourcesProvider);
++        chooser.setOptions(selected[0], options);
++        chooser.setCallback(index -> selected[0] = index);
++        parent.addView(chooser, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
++    }
++
+     public static void showInfoSheet(Context context, int currentAccount, long dialogId, TLRPC.User user, String rank, boolean admin, boolean owner, boolean admin_can_edit, Theme.ResourcesProvider resourcesProvider) {
+         final MessagesController m = MessagesController.getInstance(currentAccount);
+         final TLRPC.Chat chat = m.getChat(-dialogId);
+diff --git a/TMessagesProj/src/main/res/values/strings.xml b/TMessagesProj/src/main/res/values/strings.xml
+index e4f8cf6..12f9bd1 100644
+--- a/TMessagesProj/src/main/res/values/strings.xml
++++ b/TMessagesProj/src/main/res/values/strings.xml
+@@ -10784,6 +10784,22 @@
+     <string name="MemberTagTitle">Member Tag</string>
+     <string name="MemberTagSelfInfo">Share your role, title or how you’re known in this group. Your tag is visible to all members.</string>
+     <string name="MemberTagTheirInfo">Add a short tag next to %s’s name.</string>
++    <string name="BlueTag">Blue Tag</string>
++    <string name="BlueTagFreeMessages">Free messages</string>
++    <string name="BlueTagInfo">%s can write without paying Stars. No admin rights are given.</string>
++    <string name="BlueTagSlowMode">Personal slow mode</string>
++    <string name="BlueTagDuration">Duration</string>
++    <string name="BlueTagLimit">Message limit</string>
++    <string name="BlueTagOff">Off</string>
++    <string name="BlueTagSecondsShort">%ds</string>
++    <string name="BlueTagMinutesShort">%dm</string>
++    <string name="BlueTagDay1">1 day</string>
++    <string name="BlueTagDays7">7 days</string>
++    <string name="BlueTagForever">Forever</string>
++    <string name="BlueTagNoLimit">No limit</string>
++    <string name="BlueTagPlaceholderLeft">Free · %d left</string>
++    <string name="BlueTagPlaceholder">Free message</string>
++    <string name="BlueTagSaved">Blue tag saved</string>
+     <string name="MemberTagHintAdd">Add Member Tag</string>
+     <string name="MemberTagHintEdit">Edit Member Tag</string>
+     <string name="MemberTagButtonAdd">Add Tag</string>

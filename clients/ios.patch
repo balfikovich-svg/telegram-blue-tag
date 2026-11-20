@@ -1,0 +1,958 @@
+diff --git a/Telegram/Telegram-iOS/en.lproj/Localizable.strings b/Telegram/Telegram-iOS/en.lproj/Localizable.strings
+index 0c6e4e2..aa060f8 100644
+--- a/Telegram/Telegram-iOS/en.lproj/Localizable.strings
++++ b/Telegram/Telegram-iOS/en.lproj/Localizable.strings
+@@ -17342,3 +17342,20 @@ Error: %8$@";
+ "VoiceOver.Reactions.ShowAll" = "Show All Reactions";
+ "VoiceOver.Reactions.Premium" = "Premium Reactions";
+ "VoiceOver.Passcode.Incorrect" = "Incorrect passcode. Please try again.";
++
++"BlueTag.Section" = "Blue Tag";
++"BlueTag.FreeMessages" = "Free Messages";
++"BlueTag.Info" = "%@ can write without paying Stars. No admin rights are given.";
++"BlueTag.SlowMode" = "Personal Slow Mode";
++"BlueTag.Duration" = "Duration";
++"BlueTag.Limit" = "Message Limit";
++"BlueTag.Off" = "Off";
++"BlueTag.SecondsShort" = "%@s";
++"BlueTag.MinutesShort" = "%@m";
++"BlueTag.Day1" = "1 day";
++"BlueTag.Days7" = "7 days";
++"BlueTag.Forever" = "Forever";
++"BlueTag.NoLimit" = "No limit";
++"BlueTag.PlaceholderLeft" = "Free · %@ left";
++"BlueTag.Placeholder" = "Free Message";
++"BlueTag.Saved" = "Blue tag saved";
+diff --git a/submodules/TelegramApi/swift_scheme.tl b/submodules/TelegramApi/swift_scheme.tl
+index 896c1c6..5f5083c 100644
+--- a/submodules/TelegramApi/swift_scheme.tl
++++ b/submodules/TelegramApi/swift_scheme.tl
+@@ -103,7 +103,7 @@ userStatusLastMonth#65899777 flags:# by_me:flags.0?true = UserStatus;
+ chatEmpty#29562865 id:long = Chat;
+ chat#41cbf256 flags:# creator:flags.0?true left:flags.2?true deactivated:flags.5?true call_active:flags.23?true call_not_empty:flags.24?true noforwards:flags.25?true id:long title:string photo:ChatPhoto participants_count:int date:int version:int migrated_to:flags.6?InputChannel admin_rights:flags.14?ChatAdminRights default_banned_rights:flags.18?ChatBannedRights = Chat;
+ chatForbidden#6592a1a7 id:long title:string = Chat;
+-channel#7ad15240 flags:# creator:flags.0?true left:flags.2?true broadcast:flags.5?true verified:flags.7?true megagroup:flags.8?true restricted:flags.9?true signatures:flags.11?true min:flags.12?true scam:flags.19?true has_link:flags.20?true has_geo:flags.21?true slowmode_enabled:flags.22?true call_active:flags.23?true call_not_empty:flags.24?true fake:flags.25?true gigagroup:flags.26?true noforwards:flags.27?true join_to_send:flags.28?true join_request:flags.29?true forum:flags.30?true flags2:# stories_hidden:flags2.1?true stories_hidden_min:flags2.2?true stories_unavailable:flags2.3?true signature_profiles:flags2.12?true autotranslation:flags2.15?true broadcast_messages_allowed:flags2.16?true monoforum:flags2.17?true forum_tabs:flags2.19?true in_news:flags2.21?true forum_sidebar:flags2.23?true id:long access_hash:flags.13?long title:string username:flags.6?string photo:ChatPhoto date:int restriction_reason:flags.9?Vector<RestrictionReason> admin_rights:flags.14?ChatAdminRights banned_rights:flags.15?ChatBannedRights default_banned_rights:flags.18?ChatBannedRights participants_count:flags.17?int usernames:flags2.0?Vector<Username> stories_max_id:flags2.4?RecentStory color:flags2.7?PeerColor profile_color:flags2.8?PeerColor emoji_status:flags2.9?EmojiStatus level:flags2.10?int subscription_until_date:flags2.11?int bot_verification_icon:flags2.13?long send_paid_messages_stars:flags2.14?long linked_monoforum_id:flags2.18?long linked_community_id:flags2.20?long pinned_msg_id:flags2.22?int = Chat;
++channel#6506067c flags:# creator:flags.0?true left:flags.2?true broadcast:flags.5?true verified:flags.7?true megagroup:flags.8?true restricted:flags.9?true signatures:flags.11?true min:flags.12?true scam:flags.19?true has_link:flags.20?true has_geo:flags.21?true slowmode_enabled:flags.22?true call_active:flags.23?true call_not_empty:flags.24?true fake:flags.25?true gigagroup:flags.26?true noforwards:flags.27?true join_to_send:flags.28?true join_request:flags.29?true forum:flags.30?true flags2:# stories_hidden:flags2.1?true stories_hidden_min:flags2.2?true stories_unavailable:flags2.3?true signature_profiles:flags2.12?true autotranslation:flags2.15?true broadcast_messages_allowed:flags2.16?true monoforum:flags2.17?true forum_tabs:flags2.19?true in_news:flags2.21?true forum_sidebar:flags2.23?true id:long access_hash:flags.13?long title:string username:flags.6?string photo:ChatPhoto date:int restriction_reason:flags.9?Vector<RestrictionReason> admin_rights:flags.14?ChatAdminRights banned_rights:flags.15?ChatBannedRights default_banned_rights:flags.18?ChatBannedRights participants_count:flags.17?int usernames:flags2.0?Vector<Username> stories_max_id:flags2.4?RecentStory color:flags2.7?PeerColor profile_color:flags2.8?PeerColor emoji_status:flags2.9?EmojiStatus level:flags2.10?int subscription_until_date:flags2.11?int bot_verification_icon:flags2.13?long send_paid_messages_stars:flags2.14?long linked_monoforum_id:flags2.18?long linked_community_id:flags2.20?long pinned_msg_id:flags2.22?int tag_perks:flags2.24?ChatMemberTagPerks = Chat;
+ channelForbidden#17d493d5 flags:# broadcast:flags.5?true megagroup:flags.8?true monoforum:flags.10?true id:long access_hash:long title:string until_date:flags.16?int = Chat;
+ communityForbidden#fd3cdab8 flags:# id:long access_hash:flags.13?long title:string = Chat;
+ community#65efe954 flags:# creator:flags.0?true left:flags.2?true min:flags.12?true flags2:# collapsed_in_dialogs:flags2.20?true id:long access_hash:flags.13?long title:string photo:ChatPhoto date:int admin_rights:flags.14?ChatAdminRights default_banned_rights:flags.18?ChatBannedRights = Chat;
+@@ -123,7 +123,7 @@ chatPhotoEmpty#37c1011c = ChatPhoto;
+ chatPhoto#1c6e1c11 flags:# has_video:flags.0?true photo_id:long stripped_thumb:flags.1?bytes dc_id:int = ChatPhoto;
+ 
+ messageEmpty#90a6ca84 flags:# id:int peer_id:flags.0?Peer = Message;
+-message#7600b9d3 flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true silent:flags.13?true post:flags.14?true from_scheduled:flags.18?true legacy:flags.19?true edit_hide:flags.21?true pinned:flags.24?true noforwards:flags.26?true invert_media:flags.27?true flags2:# offline:flags2.1?true video_processing_pending:flags2.4?true paid_suggested_post_stars:flags2.8?true paid_suggested_post_ton:flags2.9?true id:int from_id:flags.8?Peer from_boosts_applied:flags.29?int from_rank:flags2.12?string peer_id:Peer saved_peer_id:flags.28?Peer fwd_from:flags.2?MessageFwdHeader via_bot_id:flags.11?long via_business_bot_id:flags2.0?long guestchat_via_from:flags2.19?Peer reply_to:flags.3?MessageReplyHeader date:int message:string media:flags.9?MessageMedia reply_markup:flags.6?ReplyMarkup entities:flags.7?Vector<MessageEntity> views:flags.10?int forwards:flags.10?int replies:flags.23?MessageReplies edit_date:flags.15?int post_author:flags.16?string grouped_id:flags.17?long reactions:flags.20?MessageReactions restriction_reason:flags.22?Vector<RestrictionReason> ttl_period:flags.25?int quick_reply_shortcut_id:flags.30?int effect:flags2.2?long factcheck:flags2.3?FactCheck report_delivery_until_date:flags2.5?int paid_message_stars:flags2.6?long suggested_post:flags2.7?SuggestedPost schedule_repeat_period:flags2.10?int summary_from_language:flags2.11?string rich_message:flags2.13?RichMessage = Message;
++message#b917471c flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true silent:flags.13?true post:flags.14?true from_scheduled:flags.18?true legacy:flags.19?true edit_hide:flags.21?true pinned:flags.24?true noforwards:flags.26?true invert_media:flags.27?true flags2:# offline:flags2.1?true video_processing_pending:flags2.4?true paid_suggested_post_stars:flags2.8?true paid_suggested_post_ton:flags2.9?true id:int from_id:flags.8?Peer from_boosts_applied:flags.29?int from_rank:flags2.12?string from_rank_blue:flags2.20?true peer_id:Peer saved_peer_id:flags.28?Peer fwd_from:flags.2?MessageFwdHeader via_bot_id:flags.11?long via_business_bot_id:flags2.0?long guestchat_via_from:flags2.19?Peer reply_to:flags.3?MessageReplyHeader date:int message:string media:flags.9?MessageMedia reply_markup:flags.6?ReplyMarkup entities:flags.7?Vector<MessageEntity> views:flags.10?int forwards:flags.10?int replies:flags.23?MessageReplies edit_date:flags.15?int post_author:flags.16?string grouped_id:flags.17?long reactions:flags.20?MessageReactions restriction_reason:flags.22?Vector<RestrictionReason> ttl_period:flags.25?int quick_reply_shortcut_id:flags.30?int effect:flags2.2?long factcheck:flags2.3?FactCheck report_delivery_until_date:flags2.5?int paid_message_stars:flags2.6?long suggested_post:flags2.7?SuggestedPost schedule_repeat_period:flags2.10?int summary_from_language:flags2.11?string rich_message:flags2.13?RichMessage = Message;
+ messageService#7a800e0a flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true reactions_are_possible:flags.9?true silent:flags.13?true post:flags.14?true legacy:flags.19?true id:int from_id:flags.8?Peer peer_id:Peer saved_peer_id:flags.28?Peer reply_to:flags.3?MessageReplyHeader date:int action:MessageAction reactions:flags.20?MessageReactions ttl_period:flags.25?int = Message;
+ 
+ messageMediaEmpty#3ded6320 = MessageMedia;
+@@ -778,8 +778,8 @@ updates.channelDifference#2064674e flags:# final:flags.0?true pts:int timeout:fl
+ channelMessagesFilterEmpty#94d42ee7 = ChannelMessagesFilter;
+ channelMessagesFilter#cd77d957 flags:# exclude_new_messages:flags.1?true ranges:Vector<MessageRange> = ChannelMessagesFilter;
+ 
+-channelParticipant#1bd54456 flags:# user_id:long date:int subscription_until_date:flags.0?int rank:flags.2?string = ChannelParticipant;
+-channelParticipantSelf#a9478a1a flags:# via_request:flags.0?true user_id:long inviter_id:long date:int subscription_until_date:flags.1?int rank:flags.2?string = ChannelParticipant;
++channelParticipant#b8123bc8 flags:# user_id:long date:int subscription_until_date:flags.0?int rank:flags.2?string tag_perks:flags.3?ChatMemberTagPerks = ChannelParticipant;
++channelParticipantSelf#50cad9ee flags:# via_request:flags.0?true user_id:long inviter_id:long date:int subscription_until_date:flags.1?int rank:flags.2?string tag_perks:flags.3?ChatMemberTagPerks = ChannelParticipant;
+ channelParticipantCreator#2fe601d3 flags:# user_id:long admin_rights:ChatAdminRights rank:flags.0?string = ChannelParticipant;
+ channelParticipantAdmin#34c3bb53 flags:# can_edit:flags.0?true self:flags.1?true user_id:long inviter_id:flags.1?long promoted_by:long date:int admin_rights:ChatAdminRights rank:flags.2?string = ChannelParticipant;
+ channelParticipantBanned#d5f0ad91 flags:# left:flags.0?true peer:Peer kicked_by:long date:int banned_rights:ChatBannedRights rank:flags.2?string = ChannelParticipant;
+@@ -1135,6 +1135,7 @@ channelAdminLogEventActionToggleSignatureProfiles#60a79c79 new_value:Bool = Chan
+ channelAdminLogEventActionParticipantSubExtend#64642db3 prev_participant:ChannelParticipant new_participant:ChannelParticipant = ChannelAdminLogEventAction;
+ channelAdminLogEventActionToggleAutotranslation#c517f77e new_value:Bool = ChannelAdminLogEventAction;
+ channelAdminLogEventActionParticipantEditRank#5806b4ec user_id:long prev_rank:string new_rank:string = ChannelAdminLogEventAction;
++channelAdminLogEventActionParticipantEditTagPerks#4128ea6d flags:# user_id:long prev_perks:flags.0?ChatMemberTagPerks new_perks:flags.1?ChatMemberTagPerks = ChannelAdminLogEventAction;
+ 
+ channelAdminLogEvent#1fad68cd id:long date:int user_id:long action:ChannelAdminLogEventAction = ChannelAdminLogEvent;
+ 
+@@ -1304,6 +1305,7 @@ statsURL#47a971e0 url:string = StatsURL;
+ chatAdminRights#5fb224d5 flags:# change_info:flags.0?true post_messages:flags.1?true edit_messages:flags.2?true delete_messages:flags.3?true ban_users:flags.4?true invite_users:flags.5?true pin_messages:flags.7?true add_admins:flags.9?true anonymous:flags.10?true manage_call:flags.11?true other:flags.12?true manage_topics:flags.13?true post_stories:flags.14?true edit_stories:flags.15?true delete_stories:flags.16?true manage_direct_messages:flags.17?true manage_ranks:flags.18?true manage_linked_peers:flags.19?true manage_welcome_messages:flags.20?true = ChatAdminRights;
+ 
+ chatBannedRights#9f120418 flags:# view_messages:flags.0?true send_messages:flags.1?true send_media:flags.2?true send_stickers:flags.3?true send_gifs:flags.4?true send_games:flags.5?true send_inline:flags.6?true embed_links:flags.7?true send_polls:flags.8?true change_info:flags.10?true invite_users:flags.15?true pin_messages:flags.17?true manage_topics:flags.18?true send_photos:flags.19?true send_videos:flags.20?true send_roundvideos:flags.21?true send_audios:flags.22?true send_voices:flags.23?true send_docs:flags.24?true send_plain:flags.25?true edit_rank:flags.26?true send_reactions:flags.27?true manage_linked_peers:flags.28?true until_date:int = ChatBannedRights;
++chatMemberTagPerks#78b4ccb0 flags:# free_messages:flags.0?true slowmode_seconds:flags.1?int until_date:flags.2?int messages_limit:flags.3?int messages_used:flags.4?int = ChatMemberTagPerks;
+ 
+ inputWallPaper#e630b979 id:long access_hash:long = InputWallPaper;
+ inputWallPaperSlug#72091c80 slug:string = InputWallPaper;
+@@ -2934,6 +2936,7 @@ channels.reportSpam#f44a8315 channel:InputChannel participant:InputPeer id:Vecto
+ channels.getMessages#ad8c9a23 channel:InputChannel id:Vector<InputMessage> = messages.Messages;
+ channels.getParticipants#77ced9d0 channel:InputChannel filter:ChannelParticipantsFilter offset:int limit:int hash:long = channels.ChannelParticipants;
+ channels.getParticipant#a0ab6cc6 channel:InputChannel participant:InputPeer = channels.ChannelParticipant;
++channels.editMemberTagPerks#72de3d23 flags:# channel:InputChannel participant:InputPeer perks:flags.0?ChatMemberTagPerks = Updates;
+ channels.getChannels#a7f6bbb id:Vector<InputChannel> = messages.Chats;
+ channels.getFullChannel#8736a09 channel:InputChannel = messages.ChatFull;
+ channels.createChannel#91006707 flags:# broadcast:flags.0?true megagroup:flags.1?true for_import:flags.3?true forum:flags.5?true title:string about:string geo_point:flags.2?InputGeoPoint address:flags.2?string ttl_period:flags.4?int = Updates;
+diff --git a/submodules/TelegramCore/FlatSerialization/Models/TelegramChannel.fbs b/submodules/TelegramCore/FlatSerialization/Models/TelegramChannel.fbs
+index 10dc26a..6fb7da0 100644
+--- a/submodules/TelegramCore/FlatSerialization/Models/TelegramChannel.fbs
++++ b/submodules/TelegramCore/FlatSerialization/Models/TelegramChannel.fbs
+@@ -9,6 +9,7 @@ include "Optional.fbs";
+ include "PeerNameColor.fbs";
+ include "PeerEmojiStatus.fbs";
+ include "StarsAmount.fbs";
++include "TelegramChatMemberTagPerks.fbs";
+ 
+ namespace TelegramCore;
+ 
+@@ -58,6 +59,7 @@ table TelegramChannel {
+     linkedMonoforumId:PeerId (id: 25);
+     linkedBotId:PeerId (id: 26, deprecated);
+     linkedCommunityId:PeerId (id: 27);
++    tagPerks:TelegramChatMemberTagPerks (id: 28);
+ }
+ 
+ root_type TelegramChannel;
+diff --git a/submodules/TelegramCore/FlatSerialization/Models/TelegramChatMemberTagPerks.fbs b/submodules/TelegramCore/FlatSerialization/Models/TelegramChatMemberTagPerks.fbs
+new file mode 100644
+index 0000000..e84df0a
+--- /dev/null
++++ b/submodules/TelegramCore/FlatSerialization/Models/TelegramChatMemberTagPerks.fbs
+@@ -0,0 +1,10 @@
++namespace TelegramCore;
++
++// Blue Tag (see SPEC.md): perks an admin gave with a member tag
++table TelegramChatMemberTagPerks {
++    freeMessages:bool (id: 0);
++    slowmodeSeconds:int32 (id: 1);
++    untilDate:int32 (id: 2);
++    messagesLimit:int32 (id: 3);
++    messagesUsed:int32 (id: 4);
++}
+diff --git a/submodules/TelegramCore/Sources/ApiUtils/ApiChatMemberTagPerks.swift b/submodules/TelegramCore/Sources/ApiUtils/ApiChatMemberTagPerks.swift
+new file mode 100644
+index 0000000..2236d41
+--- /dev/null
++++ b/submodules/TelegramCore/Sources/ApiUtils/ApiChatMemberTagPerks.swift
+@@ -0,0 +1,42 @@
++import Foundation
++import Postbox
++internal import TelegramApi
++
++// Blue Tag (see SPEC.md): conversions of chatMemberTagPerks
++extension TelegramChatMemberTagPerks {
++    init(apiPerks: Api.ChatMemberTagPerks) {
++        switch apiPerks {
++        case let .chatMemberTagPerks(data):
++            self.init(
++                freeMessages: (data.flags & (1 << 0)) != 0,
++                slowmodeSeconds: data.slowmodeSeconds ?? 0,
++                untilDate: data.untilDate ?? 0,
++                messagesLimit: data.messagesLimit ?? 0,
++                messagesUsed: data.messagesUsed ?? 0
++            )
++        }
++    }
++
++    var apiPerks: Api.ChatMemberTagPerks {
++        var flags: Int32 = 0
++        if self.freeMessages {
++            flags |= 1 << 0
++        }
++        if self.slowmodeSeconds != 0 {
++            flags |= 1 << 1
++        }
++        if self.untilDate != 0 {
++            flags |= 1 << 2
++        }
++        if self.messagesLimit != 0 {
++            flags |= 1 << 3
++        }
++        return .chatMemberTagPerks(.init(
++            flags: flags,
++            slowmodeSeconds: self.slowmodeSeconds != 0 ? self.slowmodeSeconds : nil,
++            untilDate: self.untilDate != 0 ? self.untilDate : nil,
++            messagesLimit: self.messagesLimit != 0 ? self.messagesLimit : nil,
++            messagesUsed: nil
++        ))
++    }
++}
+diff --git a/submodules/TelegramCore/Sources/ApiUtils/ApiGroupOrChannel.swift b/submodules/TelegramCore/Sources/ApiUtils/ApiGroupOrChannel.swift
+index 0064b8c..eaf3762 100644
+--- a/submodules/TelegramCore/Sources/ApiUtils/ApiGroupOrChannel.swift
++++ b/submodules/TelegramCore/Sources/ApiUtils/ApiGroupOrChannel.swift
+@@ -249,7 +249,7 @@ func parseTelegramGroupOrChannel(chat: Api.Chat) -> Peer? {
+             }
+         }
+ 
+-        return TelegramChannel(id: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(id)), accessHash: accessHashValue, title: title, username: username, photo: imageRepresentationsForApiChatPhoto(photo), creationDate: date, version: 0, participationStatus: participationStatus, info: info, flags: channelFlags, restrictionInfo: restrictionInfo, adminRights: adminRights.flatMap(TelegramChatAdminRights.init), bannedRights: bannedRights.flatMap(TelegramChatBannedRights.init), defaultBannedRights: defaultBannedRights.flatMap(TelegramChatBannedRights.init), usernames: usernames?.map(TelegramPeerUsername.init(apiUsername:)) ?? [], storiesHidden: storiesHidden, nameColor: nameColorIndex.flatMap { PeerNameColor(rawValue: $0) }, backgroundEmojiId: backgroundEmojiId, profileColor: profileColorIndex.flatMap { PeerNameColor(rawValue: $0) }, profileBackgroundEmojiId: profileBackgroundEmojiId, emojiStatus: emojiStatus.flatMap(PeerEmojiStatus.init(apiStatus:)), approximateBoostLevel: boostLevel, subscriptionUntilDate: subscriptionUntilDate, verificationIconFileId: verificationIconFileId, sendPaidMessageStars: sendPaidMessageStars.flatMap { StarsAmount(value: $0, nanos: 0) }, linkedMonoforumId: linkedMonoforumId.flatMap { PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) }, linkedCommunityId: linkedCommunityId.flatMap { PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) })
++        return TelegramChannel(id: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(id)), accessHash: accessHashValue, title: title, username: username, photo: imageRepresentationsForApiChatPhoto(photo), creationDate: date, version: 0, participationStatus: participationStatus, info: info, flags: channelFlags, restrictionInfo: restrictionInfo, adminRights: adminRights.flatMap(TelegramChatAdminRights.init), bannedRights: bannedRights.flatMap(TelegramChatBannedRights.init), defaultBannedRights: defaultBannedRights.flatMap(TelegramChatBannedRights.init), usernames: usernames?.map(TelegramPeerUsername.init(apiUsername:)) ?? [], storiesHidden: storiesHidden, nameColor: nameColorIndex.flatMap { PeerNameColor(rawValue: $0) }, backgroundEmojiId: backgroundEmojiId, profileColor: profileColorIndex.flatMap { PeerNameColor(rawValue: $0) }, profileBackgroundEmojiId: profileBackgroundEmojiId, emojiStatus: emojiStatus.flatMap(PeerEmojiStatus.init(apiStatus:)), approximateBoostLevel: boostLevel, subscriptionUntilDate: subscriptionUntilDate, verificationIconFileId: verificationIconFileId, sendPaidMessageStars: sendPaidMessageStars.flatMap { StarsAmount(value: $0, nanos: 0) }, linkedMonoforumId: linkedMonoforumId.flatMap { PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) }, linkedCommunityId: linkedCommunityId.flatMap { PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) }, tagPerks: isMin ? nil : channelData.tagPerks.flatMap(TelegramChatMemberTagPerks.init(apiPerks:)))
+     case let .channelForbidden(channelForbiddenData):
+         let (flags, id, accessHash, title, untilDate) = (channelForbiddenData.flags, channelForbiddenData.id, channelForbiddenData.accessHash, channelForbiddenData.title, channelForbiddenData.untilDate)
+         let info: TelegramChannelInfo
+@@ -365,7 +365,7 @@ func mergeGroupOrChannel(lhs: Peer?, rhs: Api.Chat) -> Peer? {
+                 let linkedMonoforumId = linkedMonoforumIdValue.flatMap({ PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) }) ?? lhs.linkedMonoforumId
+                 let linkedCommunityId = linkedCommunityIdValue.flatMap({ PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) }) ?? lhs.linkedCommunityId
+                 
+-                return TelegramChannel(id: lhs.id, accessHash: lhs.accessHash, title: title, username: username, photo: imageRepresentationsForApiChatPhoto(photo), creationDate: lhs.creationDate, version: lhs.version, participationStatus: lhs.participationStatus, info: info, flags: channelFlags, restrictionInfo: lhs.restrictionInfo, adminRights: lhs.adminRights, bannedRights: lhs.bannedRights, defaultBannedRights: defaultBannedRights.flatMap(TelegramChatBannedRights.init), usernames: usernames?.map(TelegramPeerUsername.init(apiUsername:)) ?? [], storiesHidden: storiesHidden, nameColor: nameColorIndex.flatMap { PeerNameColor(rawValue: $0) }, backgroundEmojiId: backgroundEmojiId, profileColor: profileColorIndex.flatMap { PeerNameColor(rawValue: $0) }, profileBackgroundEmojiId: profileBackgroundEmojiId, emojiStatus: parsedEmojiStatus, approximateBoostLevel: boostLevel, subscriptionUntilDate: subscriptionUntilDate, verificationIconFileId: verificationIconFileId, sendPaidMessageStars: sendPaidMessageStars.flatMap { StarsAmount(value: $0, nanos: 0) } ?? lhs.sendPaidMessageStars, linkedMonoforumId: linkedMonoforumId, linkedCommunityId: linkedCommunityId)
++                return TelegramChannel(id: lhs.id, accessHash: lhs.accessHash, title: title, username: username, photo: imageRepresentationsForApiChatPhoto(photo), creationDate: lhs.creationDate, version: lhs.version, participationStatus: lhs.participationStatus, info: info, flags: channelFlags, restrictionInfo: lhs.restrictionInfo, adminRights: lhs.adminRights, bannedRights: lhs.bannedRights, defaultBannedRights: defaultBannedRights.flatMap(TelegramChatBannedRights.init), usernames: usernames?.map(TelegramPeerUsername.init(apiUsername:)) ?? [], storiesHidden: storiesHidden, nameColor: nameColorIndex.flatMap { PeerNameColor(rawValue: $0) }, backgroundEmojiId: backgroundEmojiId, profileColor: profileColorIndex.flatMap { PeerNameColor(rawValue: $0) }, profileBackgroundEmojiId: profileBackgroundEmojiId, emojiStatus: parsedEmojiStatus, approximateBoostLevel: boostLevel, subscriptionUntilDate: subscriptionUntilDate, verificationIconFileId: verificationIconFileId, sendPaidMessageStars: sendPaidMessageStars.flatMap { StarsAmount(value: $0, nanos: 0) } ?? lhs.sendPaidMessageStars, linkedMonoforumId: linkedMonoforumId, linkedCommunityId: linkedCommunityId, tagPerks: lhs.tagPerks)
+             } else {
+                 return parseTelegramGroupOrChannel(chat: rhs)
+             }
+@@ -460,7 +460,7 @@ func mergeChannel(lhs: TelegramChannel?, rhs: TelegramChannel) -> TelegramChanne
+     let linkedMonoforumId = rhs.linkedMonoforumId ?? lhs.linkedMonoforumId
+     let linkedCommunityId = rhs.linkedCommunityId ?? lhs.linkedCommunityId
+     
+-    return TelegramChannel(id: lhs.id, accessHash: accessHash, title: rhs.title, username: rhs.username, photo: rhs.photo, creationDate: rhs.creationDate, version: rhs.version, participationStatus: lhs.participationStatus, info: info, flags: channelFlags, restrictionInfo: rhs.restrictionInfo, adminRights: rhs.adminRights, bannedRights: rhs.bannedRights, defaultBannedRights: rhs.defaultBannedRights, usernames: rhs.usernames, storiesHidden: storiesHidden, nameColor: rhs.nameColor, backgroundEmojiId: rhs.backgroundEmojiId, profileColor: rhs.profileColor, profileBackgroundEmojiId: rhs.profileBackgroundEmojiId, emojiStatus: rhs.emojiStatus, approximateBoostLevel: rhs.approximateBoostLevel, subscriptionUntilDate: rhs.subscriptionUntilDate, verificationIconFileId: rhs.verificationIconFileId, sendPaidMessageStars: rhs.sendPaidMessageStars, linkedMonoforumId: linkedMonoforumId, linkedCommunityId: linkedCommunityId)
++    return TelegramChannel(id: lhs.id, accessHash: accessHash, title: rhs.title, username: rhs.username, photo: rhs.photo, creationDate: rhs.creationDate, version: rhs.version, participationStatus: lhs.participationStatus, info: info, flags: channelFlags, restrictionInfo: rhs.restrictionInfo, adminRights: rhs.adminRights, bannedRights: rhs.bannedRights, defaultBannedRights: rhs.defaultBannedRights, usernames: rhs.usernames, storiesHidden: storiesHidden, nameColor: rhs.nameColor, backgroundEmojiId: rhs.backgroundEmojiId, profileColor: rhs.profileColor, profileBackgroundEmojiId: rhs.profileBackgroundEmojiId, emojiStatus: rhs.emojiStatus, approximateBoostLevel: rhs.approximateBoostLevel, subscriptionUntilDate: rhs.subscriptionUntilDate, verificationIconFileId: rhs.verificationIconFileId, sendPaidMessageStars: rhs.sendPaidMessageStars, linkedMonoforumId: linkedMonoforumId, linkedCommunityId: linkedCommunityId, tagPerks: lhs.tagPerks)
+ }
+ 
+ func mergeCommunity(lhs: TelegramCommunity?, rhs: TelegramCommunity) -> TelegramCommunity {
+diff --git a/submodules/TelegramCore/Sources/ApiUtils/StoreMessage_Telegram.swift b/submodules/TelegramCore/Sources/ApiUtils/StoreMessage_Telegram.swift
+index 9302560..417d32a 100644
+--- a/submodules/TelegramCore/Sources/ApiUtils/StoreMessage_Telegram.swift
++++ b/submodules/TelegramCore/Sources/ApiUtils/StoreMessage_Telegram.swift
+@@ -1362,7 +1362,7 @@ extension StoreMessage {
+                 }
+                 
+                 if let rank {
+-                    attributes.append(ParticipantRankMessageAttribute(rank: rank))
++                    attributes.append(ParticipantRankMessageAttribute(rank: rank, isBlue: (flags2 & (1 << 20)) != 0))
+                 }
+             
+                 if let editDate = editDate {
+diff --git a/submodules/TelegramCore/Sources/ApiUtils/TelegramChannel.swift b/submodules/TelegramCore/Sources/ApiUtils/TelegramChannel.swift
+index dd908e1..4fdd6e0 100644
+--- a/submodules/TelegramCore/Sources/ApiUtils/TelegramChannel.swift
++++ b/submodules/TelegramCore/Sources/ApiUtils/TelegramChannel.swift
+@@ -313,6 +313,10 @@ public extension TelegramChannel {
+         if let _ = self.adminRights {
+             return false
+         }
++        // Blue Tag: a personal slow mode stands for the chat's; the server reports it in channelFull
++        if let tagPerks = self.activeTagPerks(timestamp: Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)) {
++            return tagPerks.slowmodeSeconds > 0
++        }
+         if case let .group(group) = self.info {
+             return group.flags.contains(.slowModeEnabled)
+         } else {
+diff --git a/submodules/TelegramCore/Sources/SyncCore/ParticipantRankMessageAttribute.swift b/submodules/TelegramCore/Sources/SyncCore/ParticipantRankMessageAttribute.swift
+index b405726..0c61f4b 100644
+--- a/submodules/TelegramCore/Sources/SyncCore/ParticipantRankMessageAttribute.swift
++++ b/submodules/TelegramCore/Sources/SyncCore/ParticipantRankMessageAttribute.swift
+@@ -3,16 +3,21 @@ import Postbox
+ 
+ public class ParticipantRankMessageAttribute: MessageAttribute {
+     public let rank: String
++    // Blue Tag: the author had perks when it was sent (message.from_rank_blue)
++    public let isBlue: Bool
+     
+-    public init(rank: String) {
++    public init(rank: String, isBlue: Bool = false) {
+         self.rank = rank
++        self.isBlue = isBlue
+     }
+     
+     required public init(decoder: PostboxDecoder) {
+         self.rank = decoder.decodeStringForKey("r", orElse: "")
++        self.isBlue = decoder.decodeBoolForKey("b", orElse: false)
+     }
+     
+     public func encode(_ encoder: PostboxEncoder) {
+         encoder.encodeString(self.rank, forKey: "r")
++        encoder.encodeBool(self.isBlue, forKey: "b")
+     }
+ }
+diff --git a/submodules/TelegramCore/Sources/SyncCore/SyncCore_TelegramChannel.swift b/submodules/TelegramCore/Sources/SyncCore/SyncCore_TelegramChannel.swift
+index 90e50d5..afe38c1 100644
+--- a/submodules/TelegramCore/Sources/SyncCore/SyncCore_TelegramChannel.swift
++++ b/submodules/TelegramCore/Sources/SyncCore/SyncCore_TelegramChannel.swift
+@@ -217,6 +217,8 @@ public final class TelegramChannel: Peer, Equatable {
+     public let sendPaidMessageStars: StarsAmount?
+     public let linkedMonoforumId: PeerId?
+     public let linkedCommunityId: PeerId?
++    // Blue Tag: my perks in this chat, delivered with the channel like adminRights
++    public let tagPerks: TelegramChatMemberTagPerks?
+     
+     public var associatedPeerId: PeerId? {
+         if self.flags.contains(.isMonoforum) {
+@@ -308,7 +310,8 @@ public final class TelegramChannel: Peer, Equatable {
+         verificationIconFileId: Int64?,
+         sendPaidMessageStars: StarsAmount?,
+         linkedMonoforumId: PeerId?,
+-        linkedCommunityId: PeerId? = nil
++        linkedCommunityId: PeerId? = nil,
++        tagPerks: TelegramChatMemberTagPerks? = nil
+     ) {
+         self.id = id
+         self.accessHash = accessHash
+@@ -337,6 +340,7 @@ public final class TelegramChannel: Peer, Equatable {
+         self.sendPaidMessageStars = sendPaidMessageStars
+         self.linkedMonoforumId = linkedMonoforumId
+         self.linkedCommunityId = linkedCommunityId
++        self.tagPerks = tagPerks
+     }
+     
+     public init(decoder: PostboxDecoder) {
+@@ -377,6 +381,7 @@ public final class TelegramChannel: Peer, Equatable {
+         self.sendPaidMessageStars = decoder.decodeCodable(StarsAmount.self, forKey: "sendPaidMessageStars")
+         self.linkedMonoforumId = decoder.decodeOptionalInt64ForKey("lmid").flatMap(PeerId.init)
+         self.linkedCommunityId = decoder.decodeOptionalInt64ForKey("lcid").flatMap(PeerId.init)
++        self.tagPerks = decoder.decodeCodable(TelegramChatMemberTagPerks.self, forKey: "tagPerks")
+     }
+     
+     public func encode(_ encoder: PostboxEncoder) {
+@@ -493,6 +498,12 @@ public final class TelegramChannel: Peer, Equatable {
+             encoder.encodeNil(forKey: "lmid")
+         }
+ 
++        if let tagPerks = self.tagPerks {
++            encoder.encodeCodable(tagPerks, forKey: "tagPerks")
++        } else {
++            encoder.encodeNil(forKey: "tagPerks")
++        }
++
+         if let linkedCommunityId = self.linkedCommunityId {
+             encoder.encodeInt64(linkedCommunityId.toInt64(), forKey: "lcid")
+         } else {
+@@ -571,71 +582,78 @@ public final class TelegramChannel: Peer, Equatable {
+         if lhs.linkedCommunityId != rhs.linkedCommunityId {
+             return false
+         }
++        if lhs.tagPerks != rhs.tagPerks {
++            return false
++        }
+         return true
+     }
+     
+     public func withUpdatedAddressName(_ addressName: String?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: addressName, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: addressName, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedAddressNames(_ addressNames: [TelegramPeerUsername]) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: addressNames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: addressNames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedDefaultBannedRights(_ defaultBannedRights: TelegramChatBannedRights?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedFlags(_ flags: TelegramChannelFlags) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedInfo(_ info: TelegramChannelInfo) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+ 
+     public func withUpdatedLinkedCommunityId(_ linkedCommunityId: PeerId?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: linkedCommunityId, tagPerks: self.tagPerks)
++    }
++
++    public func withUpdatedTagPerks(_ tagPerks: TelegramChatMemberTagPerks?) -> TelegramChannel {
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: tagPerks)
+     }
+ 
+     public func withUpdatedSendPaidMessageStars(_ sendPaidMessageStars: StarsAmount?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedStoriesHidden(_ storiesHidden: Bool?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedNameColor(_ nameColor: PeerNameColor?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedBackgroundEmojiId(_ backgroundEmojiId: Int64?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedProfileColor(_ profileColor: PeerNameColor?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedProfileBackgroundEmojiId(_ profileBackgroundEmojiId: Int64?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedEmojiStatus(_ emojiStatus: PeerEmojiStatus?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedApproximateBoostLevel(_ approximateBoostLevel: Int32?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedSubscriptionUntilDate(_ subscriptionUntilDate: Int32?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: subscriptionUntilDate, verificationIconFileId: self.verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public func withUpdatedVerificationIconFileId(_ verificationIconFileId: Int64?) -> TelegramChannel {
+-        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId)
++        return TelegramChannel(id: self.id, accessHash: self.accessHash, title: self.title, username: self.username, photo: self.photo, creationDate: self.creationDate, version: self.version, participationStatus: self.participationStatus, info: self.info, flags: self.flags, restrictionInfo: self.restrictionInfo, adminRights: self.adminRights, bannedRights: self.bannedRights, defaultBannedRights: self.defaultBannedRights, usernames: self.usernames, storiesHidden: self.storiesHidden, nameColor: self.nameColor, backgroundEmojiId: self.backgroundEmojiId, profileColor: self.profileColor, profileBackgroundEmojiId: self.profileBackgroundEmojiId, emojiStatus: self.emojiStatus, approximateBoostLevel: self.approximateBoostLevel, subscriptionUntilDate: self.subscriptionUntilDate, verificationIconFileId: verificationIconFileId, sendPaidMessageStars: self.sendPaidMessageStars, linkedMonoforumId: self.linkedMonoforumId, linkedCommunityId: self.linkedCommunityId, tagPerks: self.tagPerks)
+     }
+     
+     public init(flatBuffersObject: TelegramCore_TelegramChannel) throws {
+@@ -671,6 +689,7 @@ public final class TelegramChannel: Peer, Equatable {
+         self.sendPaidMessageStars = try flatBuffersObject.sendPaidMessageStars.flatMap { try StarsAmount(flatBuffersObject: $0) }
+         self.linkedMonoforumId = flatBuffersObject.linkedMonoforumId.flatMap { PeerId(flatBuffersObject: $0) }
+         self.linkedCommunityId = flatBuffersObject.linkedCommunityId.flatMap { PeerId(flatBuffersObject: $0) }
++        self.tagPerks = try flatBuffersObject.tagPerks.flatMap { try TelegramChatMemberTagPerks(flatBuffersObject: $0) }
+     }
+     
+     public func encodeToFlatBuffers(builder: inout FlatBufferBuilder) -> Offset {
+@@ -695,6 +714,7 @@ public final class TelegramChannel: Peer, Equatable {
+         let defaultBannedRightsOffset = self.defaultBannedRights?.encodeToFlatBuffers(builder: &builder)
+         let emojiStatusOffset = self.emojiStatus?.encodeToFlatBuffers(builder: &builder)
+         let sendPaidMessageStarsOffset = self.sendPaidMessageStars?.encodeToFlatBuffers(builder: &builder)
++        let tagPerksOffset = self.tagPerks?.encodeToFlatBuffers(builder: &builder)
+         
+         let start = TelegramCore_TelegramChannel.startTelegramChannel(&builder)
+         
+@@ -754,6 +774,9 @@ public final class TelegramChannel: Peer, Equatable {
+         if let linkedCommunityId = self.linkedCommunityId {
+             TelegramCore_TelegramChannel.add(linkedCommunityId: linkedCommunityId.asFlatBuffersObject(), &builder)
+         }
++        if let tagPerksOffset {
++            TelegramCore_TelegramChannel.add(tagPerks: tagPerksOffset, &builder)
++        }
+         
+         return TelegramCore_TelegramChannel.endTelegramChannel(&builder, start: start)
+     }
+diff --git a/submodules/TelegramCore/Sources/SyncCore/SyncCore_TelegramChatMemberTagPerks.swift b/submodules/TelegramCore/Sources/SyncCore/SyncCore_TelegramChatMemberTagPerks.swift
+new file mode 100644
+index 0000000..fcae184
+--- /dev/null
++++ b/submodules/TelegramCore/Sources/SyncCore/SyncCore_TelegramChatMemberTagPerks.swift
+@@ -0,0 +1,74 @@
++import Foundation
++import Postbox
++import FlatBuffers
++import FlatSerialization
++
++/// Blue Tag (see SPEC.md): perks an admin gave a member together with a member tag —
++/// free messages in a group with paid messages, a personal slow mode, for a time or a number of messages.
++public struct TelegramChatMemberTagPerks: Codable, Equatable {
++    public var freeMessages: Bool
++    public var slowmodeSeconds: Int32
++    public var untilDate: Int32
++    public var messagesLimit: Int32
++    public var messagesUsed: Int32
++
++    public init(freeMessages: Bool, slowmodeSeconds: Int32 = 0, untilDate: Int32 = 0, messagesLimit: Int32 = 0, messagesUsed: Int32 = 0) {
++        self.freeMessages = freeMessages
++        self.slowmodeSeconds = slowmodeSeconds
++        self.untilDate = untilDate
++        self.messagesLimit = messagesLimit
++        self.messagesUsed = messagesUsed
++    }
++
++    public func isActive(timestamp: Int32) -> Bool {
++        if self.untilDate != 0 && self.untilDate <= timestamp {
++            return false
++        }
++        if self.messagesLimit != 0 && self.messagesUsed >= self.messagesLimit {
++            return false
++        }
++        return true
++    }
++
++    /// nil when there is no limit
++    public var messagesLeft: Int32? {
++        if self.messagesLimit == 0 {
++            return nil
++        }
++        return max(0, self.messagesLimit - self.messagesUsed)
++    }
++
++    public func withOneMoreMessage() -> TelegramChatMemberTagPerks {
++        var result = self
++        result.messagesUsed += 1
++        return result
++    }
++
++    public init(flatBuffersObject: TelegramCore_TelegramChatMemberTagPerks) throws {
++        self.freeMessages = flatBuffersObject.freeMessages
++        self.slowmodeSeconds = flatBuffersObject.slowmodeSeconds
++        self.untilDate = flatBuffersObject.untilDate
++        self.messagesLimit = flatBuffersObject.messagesLimit
++        self.messagesUsed = flatBuffersObject.messagesUsed
++    }
++
++    public func encodeToFlatBuffers(builder: inout FlatBufferBuilder) -> Offset {
++        let start = TelegramCore_TelegramChatMemberTagPerks.startTelegramChatMemberTagPerks(&builder)
++        TelegramCore_TelegramChatMemberTagPerks.add(freeMessages: self.freeMessages, &builder)
++        TelegramCore_TelegramChatMemberTagPerks.add(slowmodeSeconds: self.slowmodeSeconds, &builder)
++        TelegramCore_TelegramChatMemberTagPerks.add(untilDate: self.untilDate, &builder)
++        TelegramCore_TelegramChatMemberTagPerks.add(messagesLimit: self.messagesLimit, &builder)
++        TelegramCore_TelegramChatMemberTagPerks.add(messagesUsed: self.messagesUsed, &builder)
++        return TelegramCore_TelegramChatMemberTagPerks.endTelegramChatMemberTagPerks(&builder, start: start)
++    }
++}
++
++public extension TelegramChannel {
++    /// My Blue Tag perks in this chat while they last
++    func activeTagPerks(timestamp: Int32) -> TelegramChatMemberTagPerks? {
++        guard let tagPerks = self.tagPerks, tagPerks.isActive(timestamp: timestamp) else {
++            return nil
++        }
++        return tagPerks
++    }
++}
+diff --git a/submodules/TelegramCore/Sources/TelegramEngine/Peers/Ranks.swift b/submodules/TelegramCore/Sources/TelegramEngine/Peers/Ranks.swift
+index 9500fa2..dfc89a9 100644
+--- a/submodules/TelegramCore/Sources/TelegramEngine/Peers/Ranks.swift
++++ b/submodules/TelegramCore/Sources/TelegramEngine/Peers/Ranks.swift
+@@ -107,3 +107,84 @@ func _internal_updateChatRank(account: Account, peerId: PeerId, userId: PeerId,
+ }
+ 
+ 
++
++// MARK: - Blue Tag (see SPEC.md)
++
++public enum UpdateChatMemberTagPerksError {
++    case generic
++    case chatAdminRequired
++    case rankEmpty
++    case participantAdmin
++    case invalid
++}
++
++/// Gives a member Blue Tag perks, or takes them away with `perks == nil`. The tag itself stays.
++func _internal_updateChatMemberTagPerks(account: Account, peerId: PeerId, userId: PeerId, perks: TelegramChatMemberTagPerks?) -> Signal<Never, UpdateChatMemberTagPerksError> {
++    return account.postbox.transaction { transaction -> (Api.InputChannel, Api.InputPeer)? in
++        guard let peer = transaction.getPeer(peerId), let inputChannel = apiInputChannel(peer), let user = transaction.getPeer(userId), let inputUser = apiInputPeer(user) else {
++            return nil
++        }
++        return (inputChannel, inputUser)
++    }
++    |> castError(UpdateChatMemberTagPerksError.self)
++    |> mapToSignal { inputs -> Signal<Never, UpdateChatMemberTagPerksError> in
++        guard let (inputChannel, inputUser) = inputs else {
++            return .fail(.generic)
++        }
++        var flags: Int32 = 0
++        if perks != nil {
++            flags |= 1 << 0
++        }
++        return account.network.request(Api.functions.channels.editMemberTagPerks(flags: flags, channel: inputChannel, participant: inputUser, perks: perks?.apiPerks))
++        |> mapError { error -> UpdateChatMemberTagPerksError in
++            switch error.errorDescription {
++            case "CHAT_ADMIN_REQUIRED":
++                return .chatAdminRequired
++            case "TAG_PERKS_RANK_EMPTY":
++                return .rankEmpty
++            case "TAG_PERKS_PARTICIPANT_ADMIN":
++                return .participantAdmin
++            case "TAG_PERKS_INVALID":
++                return .invalid
++            default:
++                return .generic
++            }
++        }
++        |> mapToSignal { updates -> Signal<Never, UpdateChatMemberTagPerksError> in
++            account.stateManager.addUpdates(updates)
++            return .complete()
++        }
++    }
++}
++
++/// A member's current Blue Tag perks, for the Edit Member Tag screen.
++func _internal_chatMemberTagPerks(account: Account, peerId: PeerId, userId: PeerId) -> Signal<TelegramChatMemberTagPerks?, NoError> {
++    return account.postbox.transaction { transaction -> (Api.InputChannel, Api.InputPeer)? in
++        guard let peer = transaction.getPeer(peerId), let inputChannel = apiInputChannel(peer), let user = transaction.getPeer(userId), let inputUser = apiInputPeer(user) else {
++            return nil
++        }
++        return (inputChannel, inputUser)
++    }
++    |> mapToSignal { inputs -> Signal<TelegramChatMemberTagPerks?, NoError> in
++        guard let (inputChannel, inputUser) = inputs else {
++            return .single(nil)
++        }
++        return account.network.request(Api.functions.channels.getParticipant(channel: inputChannel, participant: inputUser))
++        |> map(Optional.init)
++        |> `catch` { _ -> Signal<Api.channels.ChannelParticipant?, NoError> in
++            return .single(nil)
++        }
++        |> map { result -> TelegramChatMemberTagPerks? in
++            guard case let .channelParticipant(data)? = result else {
++                return nil
++            }
++            switch data.participant {
++            case let .channelParticipant(participantData):
++                return participantData.tagPerks.flatMap(TelegramChatMemberTagPerks.init(apiPerks:))
++            default:
++                return nil
++            }
++        }
++    }
++}
++
+diff --git a/submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift b/submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift
+index 37441e5..f8107ff 100644
+--- a/submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift
++++ b/submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift
+@@ -672,6 +672,16 @@ public extension TelegramEngine {
+             return _internal_updateChatRank(account: account, peerId: peerId, userId: userId, messageId: messageId, rank: rank)
+         }
+ 
++        /// Blue Tag: gives a member perks, or takes them away with `perks == nil`
++        public func updateChatMemberTagPerks(peerId: PeerId, userId: PeerId, perks: TelegramChatMemberTagPerks?) -> Signal<Never, UpdateChatMemberTagPerksError> {
++            return _internal_updateChatMemberTagPerks(account: self.account, peerId: peerId, userId: userId, perks: perks)
++        }
++
++        /// Blue Tag: a member's current perks
++        public func chatMemberTagPerks(peerId: PeerId, userId: PeerId) -> Signal<TelegramChatMemberTagPerks?, NoError> {
++            return _internal_chatMemberTagPerks(account: self.account, peerId: peerId, userId: userId)
++        }
++
+         public func terminateSecretChat(peerId: PeerId, requestRemoteHistoryRemoval: Bool) -> Signal<Never, NoError> {
+             return self.account.postbox.transaction { transaction -> Void in
+                 _internal_terminateSecretChat(transaction: transaction, peerId: peerId, requestRemoteHistoryRemoval: requestRemoteHistoryRemoval)
+diff --git a/submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift b/submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift
+index 50540f7..98974c0 100644
+--- a/submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift
++++ b/submodules/TelegramUI/Components/Chat/ChatMessageBubbleItemNode/Sources/ChatMessageBubbleItemNode.swift
+@@ -2330,6 +2330,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
+         
+         var authorNameString: String?
+         var authorRank: CachedChannelAdminRank?
++        var authorRankIsBlue = false // Blue Tag
+         var authorIsChannel: Bool = false
+         switch content {
+             case let .message(message, _, _, attributes, _):
+@@ -2371,6 +2372,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
+                 if authorRank == nil {
+                     if let rankAttribute = message.attributes.first(where: { $0 is ParticipantRankMessageAttribute }) as? ParticipantRankMessageAttribute, !rankAttribute.rank.isEmpty {
+                         authorRank = .member(rankAttribute.rank)
++                        authorRankIsBlue = rankAttribute.isBlue
+                     }
+                 }
+             case .group:
+@@ -3087,6 +3089,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
+                                     defaultRankColor = defaultRankColor.withMultipliedAlpha(0.5)
+                                 } else {
+                                     string = rank
++                                    if authorRankIsBlue {
++                                        // Blue Tag: a member's tag with perks wears blue, on a pill as an admin's does
++                                        rankBadgeColor = UIColor(rgb: 0x3e88f7)
++                                    }
+                                 }
+                             } else {
+                                 string = ""
+diff --git a/submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift b/submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift
+index 834a34c..68cbebb 100644
+--- a/submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift
++++ b/submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift
+@@ -2315,6 +2315,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
+                                 if let sendPaidMessageStars = interfaceState.sendPaidMessageStars, interfaceState.interfaceState.editMessage == nil {
+                                     placeholder = interfaceState.strings.Chat_InputTextPaidMessagePlaceholder(" # \(presentationStringsFormattedNumber(Int32(sendPaidMessageStars.value), interfaceState.dateTimeFormat.groupingSeparator))").string
+                                     placeholderHasStar = true
++                                } else if let channel = peer as? TelegramChannel, channel.sendPaidMessageStars != nil, let tagPerks = channel.activeTagPerks(timestamp: Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)), tagPerks.freeMessages, interfaceState.interfaceState.editMessage == nil {
++                                    // Blue Tag: free messages, and how many are left
++                                    if let messagesLeft = tagPerks.messagesLeft {
++                                        placeholder = interfaceState.strings.BlueTag_PlaceholderLeft("\(messagesLeft)").string
++                                    } else {
++                                        placeholder = interfaceState.strings.BlueTag_Placeholder
++                                    }
+                                 } else {
+                                     placeholder = interfaceState.strings.Conversation_InputTextPlaceholder
+                                 }
+diff --git a/submodules/TelegramUI/Components/ChatParticipantRightsScreen/BUILD b/submodules/TelegramUI/Components/ChatParticipantRightsScreen/BUILD
+index 981a7dd..beffdcf 100644
+--- a/submodules/TelegramUI/Components/ChatParticipantRightsScreen/BUILD
++++ b/submodules/TelegramUI/Components/ChatParticipantRightsScreen/BUILD
+@@ -36,6 +36,7 @@ swift_library(
+         "//submodules/PeerInfoUI",
+         "//submodules/UndoUI",
+         "//submodules/TelegramUI/Components/RankChatPreviewItem",
++        "//submodules/TelegramUI/Components/ListItemSliderSelectorComponent",
+     ],
+     visibility = [
+         "//visibility:public",
+diff --git a/submodules/TelegramUI/Components/ChatParticipantRightsScreen/Sources/ChatParticipantRightsScreen.swift b/submodules/TelegramUI/Components/ChatParticipantRightsScreen/Sources/ChatParticipantRightsScreen.swift
+index e22c1fc..cbe5574 100644
+--- a/submodules/TelegramUI/Components/ChatParticipantRightsScreen/Sources/ChatParticipantRightsScreen.swift
++++ b/submodules/TelegramUI/Components/ChatParticipantRightsScreen/Sources/ChatParticipantRightsScreen.swift
+@@ -24,10 +24,52 @@ import ItemListUI
+ import PeerInfoUI
+ import UndoUI
+ import RankChatPreviewItem
++import ListItemSliderSelectorComponent
+ 
+ private let rankFieldTag = GenericComponentViewTag()
+ private let rankMaxLength: Int32 = 16
+ 
++// Blue Tag (see SPEC.md): free messages and a personal slow mode, for a time or a number of messages
++private let blueTagSlowModeOptions: [Int32] = [0, 10, 30, 60, 300]
++private let blueTagDurationOptions: [Int32] = [86400, 7 * 86400, 0]
++private let blueTagLimitOptions: [Int32] = [10, 50, 0]
++
++struct BlueTagDraft: Equatable {
++    var isEnabled: Bool = false
++    var freeMessages: Bool = true
++    var slowModeIndex: Int = 2
++    var durationIndex: Int = 1
++    var limitIndex: Int = 1
++
++    init() {
++    }
++
++    init(perks: TelegramChatMemberTagPerks, timestamp: Int32) {
++        self.isEnabled = true
++        self.freeMessages = perks.freeMessages
++        self.slowModeIndex = blueTagSlowModeOptions.firstIndex(of: perks.slowmodeSeconds) ?? 2
++        if perks.untilDate == 0 {
++            self.durationIndex = 2
++        } else {
++            self.durationIndex = perks.untilDate - timestamp > 86400 ? 1 : 0
++        }
++        self.limitIndex = blueTagLimitOptions.firstIndex(of: perks.messagesLimit) ?? 1
++    }
++
++    func perks(timestamp: Int32) -> TelegramChatMemberTagPerks? {
++        guard self.isEnabled else {
++            return nil
++        }
++        let duration = blueTagDurationOptions[self.durationIndex]
++        return TelegramChatMemberTagPerks(
++            freeMessages: self.freeMessages,
++            slowmodeSeconds: blueTagSlowModeOptions[self.slowModeIndex],
++            untilDate: duration == 0 ? 0 : timestamp + duration,
++            messagesLimit: blueTagLimitOptions[self.limitIndex]
++        )
++    }
++}
++
+ private final class ChatParticipantRightsContent: CombinedComponent {
+     typealias EnvironmentType = ViewControllerComponentContainer.Environment
+     
+@@ -62,6 +104,12 @@ private final class ChatParticipantRightsContent: CombinedComponent {
+         
+         var rank: String?
+         var initialRank: String?
++
++        // Blue Tag
++        var canEditPerks = false
++        var blueTag = BlueTagDraft()
++        var initialBlueTag = BlueTagDraft()
++        var perksDisposable: Disposable?
+         
+         weak var controller: ViewController?
+         
+@@ -81,20 +129,47 @@ private final class ChatParticipantRightsContent: CombinedComponent {
+             
+             self.disposable = (context.engine.data.subscribe(
+                 TelegramEngine.EngineData.Item.Peer.Peer(id: participantId),
+-                TelegramEngine.EngineData.Item.Peer.Presence(id: participantId)
++                TelegramEngine.EngineData.Item.Peer.Presence(id: participantId),
++                TelegramEngine.EngineData.Item.Peer.Peer(id: subject.peerId)
+             )
+-            |> deliverOnMainQueue).start(next: { [weak self] peer, presence in
++            |> deliverOnMainQueue).start(next: { [weak self] peer, presence, chatPeer in
+                 guard let self else {
+                     return
+                 }
+                 self.peer = peer
+                 self.presence = presence
++                self.updateCanEditPerks(chatPeer: chatPeer)
+                 self.updated()
+             })
+         }
+         
+         deinit {
+             self.disposable?.dispose()
++            self.perksDisposable?.dispose()
++        }
++
++        // Blue Tag: a supergroup's admin who can ban gives perks to a member who is not an admin
++        private func updateCanEditPerks(chatPeer: EnginePeer?) {
++            guard !self.canEditPerks, case let .rank(peerId, participantId, _, role) = self.subject, case .member = role, participantId != self.context.account.peerId else {
++                return
++            }
++            guard case let .channel(channel)? = chatPeer, case .group = channel.info, channel.hasPermission(.banMembers) else {
++                return
++            }
++            self.canEditPerks = true
++            self.perksDisposable = (self.context.engine.peers.chatMemberTagPerks(peerId: peerId, userId: participantId)
++            |> deliverOnMainQueue).start(next: { [weak self] perks in
++                guard let self, let perks else {
++                    return
++                }
++                let timestamp = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
++                guard perks.isActive(timestamp: timestamp) else {
++                    return
++                }
++                self.blueTag = BlueTagDraft(perks: perks, timestamp: timestamp)
++                self.initialBlueTag = self.blueTag
++                self.updated(transition: .immediate)
++            })
+         }
+         
+         func animateError() {
+@@ -108,7 +183,9 @@ private final class ChatParticipantRightsContent: CombinedComponent {
+             guard let controller = self.controller as? ChatParticipantRightsScreen else {
+                 return
+             }
+-            controller.complete(rank: self.rank)
++            let timestamp = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
++            let perksChanged = self.canEditPerks && self.blueTag != self.initialBlueTag
++            controller.complete(rank: self.rank, perks: perksChanged ? .some(self.blueTag.perks(timestamp: timestamp)) : nil)
+         }
+     } 
+     
+@@ -120,6 +197,7 @@ private final class ChatParticipantRightsContent: CombinedComponent {
+         let closeButton = Child(GlassBarButtonComponent.self)
+         let title = Child(MultilineTextComponent.self)
+         let rankSection = Child(ListSectionComponent.self)
++        let blueTagSection = Child(ListSectionComponent.self)
+         let doneButton = Child(ButtonComponent.self)
+         
+         return { context in
+@@ -300,6 +378,92 @@ private final class ChatParticipantRightsContent: CombinedComponent {
+             )
+             contentHeight += rankSection.size.height
+             
++            if state.canEditPerks {
++                contentHeight += 24.0
++                let blueTag = state.blueTag
++                var blueTagItems: [AnyComponentWithIdentity<Empty>] = []
++                blueTagItems.append(AnyComponentWithIdentity(id: "blue", component: AnyComponent(ListActionItemComponent(
++                    theme: theme,
++                    style: .glass,
++                    title: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: strings.BlueTag_Section, font: Font.semibold(presentationData.listsFontSize.baseDisplaySize), textColor: UIColor(rgb: 0x3e88f7))))),
++                    accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: blueTag.isEnabled, action: { [weak state] value in
++                        guard let state else {
++                            return
++                        }
++                        state.blueTag.isEnabled = value
++                        state.updated(transition: .spring(duration: 0.4))
++                    })),
++                    action: nil
++                ))))
++                if blueTag.isEnabled {
++                    blueTagItems.append(AnyComponentWithIdentity(id: "free", component: AnyComponent(ListActionItemComponent(
++                        theme: theme,
++                        style: .glass,
++                        title: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: strings.BlueTag_FreeMessages, font: Font.regular(presentationData.listsFontSize.baseDisplaySize), textColor: theme.list.itemPrimaryTextColor)))),
++                        accessory: .toggle(ListActionItemComponent.Toggle(style: .regular, isOn: blueTag.freeMessages, action: { [weak state] value in
++                            guard let state else {
++                                return
++                            }
++                            state.blueTag.freeMessages = value
++                            state.updated(transition: .immediate)
++                        })),
++                        action: nil
++                    ))))
++                    let slowModeTitles = blueTagSlowModeOptions.map { seconds -> String in
++                        if seconds == 0 {
++                            return strings.BlueTag_Off
++                        } else if seconds < 60 {
++                            return strings.BlueTag_SecondsShort("\(seconds)").string
++                        } else {
++                            return strings.BlueTag_MinutesShort("\(seconds / 60)").string
++                        }
++                    }
++                    blueTagItems.append(AnyComponentWithIdentity(id: "slowmode", component: AnyComponent(ListItemSliderSelectorComponent(
++                        theme: theme,
++                        content: .discrete(ListItemSliderSelectorComponent.Discrete(values: slowModeTitles, markPositions: true, selectedIndex: blueTag.slowModeIndex, title: strings.BlueTag_SlowMode, selectedIndexUpdated: { [weak state] index in
++                            state?.blueTag.slowModeIndex = index
++                            state?.updated(transition: .immediate)
++                        }))
++                    ))))
++                    blueTagItems.append(AnyComponentWithIdentity(id: "duration", component: AnyComponent(ListItemSliderSelectorComponent(
++                        theme: theme,
++                        content: .discrete(ListItemSliderSelectorComponent.Discrete(values: [strings.BlueTag_Day1, strings.BlueTag_Days7, strings.BlueTag_Forever], markPositions: true, selectedIndex: blueTag.durationIndex, title: strings.BlueTag_Duration, selectedIndexUpdated: { [weak state] index in
++                            state?.blueTag.durationIndex = index
++                            state?.updated(transition: .immediate)
++                        }))
++                    ))))
++                    blueTagItems.append(AnyComponentWithIdentity(id: "limit", component: AnyComponent(ListItemSliderSelectorComponent(
++                        theme: theme,
++                        content: .discrete(ListItemSliderSelectorComponent.Discrete(values: ["10", "50", strings.BlueTag_NoLimit], markPositions: true, selectedIndex: blueTag.limitIndex, title: strings.BlueTag_Limit, selectedIndexUpdated: { [weak state] index in
++                            state?.blueTag.limitIndex = index
++                            state?.updated(transition: .immediate)
++                        }))
++                    ))))
++                }
++                let blueTagSection = blueTagSection.update(
++                    component: ListSectionComponent(
++                        theme: theme,
++                        style: .glass,
++                        header: nil,
++                        footer: blueTag.isEnabled ? AnyComponent(MultilineTextComponent(
++                            text: .plain(NSAttributedString(
++                                string: strings.BlueTag_Info(peer.compactDisplayTitle).string,
++                                font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
++                                textColor: theme.list.freeTextColor
++                            )),
++                            maximumNumberOfLines: 0
++                        )) : nil,
++                        items: blueTagItems
++                    ),
++                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0, height: context.availableSize.height),
++                    transition: context.transition
++                )
++                context.add(blueTagSection
++                    .position(CGPoint(x: context.availableSize.width / 2.0, y: contentHeight + blueTagSection.size.height / 2.0))
++                )
++                contentHeight += blueTagSection.size.height
++            }
++            
+             contentHeight += 24.0
+             
+             let buttonTitle: String
+@@ -500,7 +664,8 @@ public class ChatParticipantRightsScreen: ViewControllerComponentContainer {
+         self.view.disablesInteractiveModalDismiss = true
+     }
+     
+-    fileprivate func complete(rank: String?) {
++    /// `perks`: nil when unchanged; `.some(nil)` takes Blue Tag perks away
++    fileprivate func complete(rank: String?, perks: TelegramChatMemberTagPerks?? = nil) {
+         var rank = rank
+         if rank?.isEmpty == true {
+             rank = nil
+@@ -514,7 +679,24 @@ public class ChatParticipantRightsScreen: ViewControllerComponentContainer {
+             return
+         }
+         
+-        let _ = self.context.peerChannelMemberCategoriesContextsManager.updateMemberRank(engine: self.context.engine, peerId: self.subject.peerId, memberId: self.subject.participantId, rank: rank).start()
++        if let perks, perks != nil, rank == nil {
++            // TAG_PERKS_RANK_EMPTY: the perks go with a tag
++            self.animateError()
++            HapticFeedback().error()
++            return
++        }
++
++        var initialRankValue: String?
++        if case let .rank(_, _, initialRank, _) = self.subject {
++            initialRankValue = initialRank
++        }
++        if (initialRankValue ?? "") != (rank ?? "") {
++            let _ = self.context.peerChannelMemberCategoriesContextsManager.updateMemberRank(engine: self.context.engine, peerId: self.subject.peerId, memberId: self.subject.participantId, rank: rank).start()
++        }
++        if let perks {
++            // Blue Tag
++            let _ = self.context.engine.peers.updateChatMemberTagPerks(peerId: self.subject.peerId, userId: self.subject.participantId, perks: perks).start()
++        }
+         
+         let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+         if let navigationController = self.navigationController as? NavigationController {
+diff --git a/submodules/TelegramUI/Sources/ChatControllerContentData.swift b/submodules/TelegramUI/Sources/ChatControllerContentData.swift
+index e94970d..7b30d87 100644
+--- a/submodules/TelegramUI/Sources/ChatControllerContentData.swift
++++ b/submodules/TelegramUI/Sources/ChatControllerContentData.swift
+@@ -915,6 +915,9 @@ extension ChatControllerImpl {
+                                     }
+                                 } else {
+                                     if channel.flags.contains(.isCreator) || channel.adminRights != nil {
++                                    } else if let tagPerks = channel.activeTagPerks(timestamp: Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)), tagPerks.freeMessages {
++                                        // Blue Tag: a member given free messages writes without paying
++                                        sendPaidMessageStars = nil
+                                     } else {
+                                         if let personalSendPaidMessageStars = cachedData.sendPaidMessageStars {
+                                             if personalSendPaidMessageStars == .zero {

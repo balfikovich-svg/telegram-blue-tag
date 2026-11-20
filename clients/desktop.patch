@@ -1,0 +1,762 @@
+diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
+index baff0f2..5d80219 100644
+--- a/Telegram/Resources/langs/lang.strings
++++ b/Telegram/Resources/langs/lang.strings
+@@ -6752,6 +6752,20 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ "lng_context_edit_member_tag" = "Edit member tag";
+ "lng_rights_edit_tag_title" = "Edit tag";
+ "lng_rights_tag_about" = "Add short tag next to {name}'s name.";
++"lng_blue_tag_section" = "Blue Tag";
++"lng_blue_tag_free" = "Free messages";
++"lng_blue_tag_about" = "{name} can write without paying Stars. No admin rights are given.";
++"lng_blue_tag_slowmode" = "Personal slow mode";
++"lng_blue_tag_duration" = "Duration";
++"lng_blue_tag_limit" = "Message limit";
++"lng_blue_tag_off" = "Off";
++"lng_blue_tag_seconds" = "{value}s";
++"lng_blue_tag_minutes" = "{value}m";
++"lng_blue_tag_day1" = "1 day";
++"lng_blue_tag_days7" = "7 days";
++"lng_blue_tag_forever" = "Forever";
++"lng_blue_tag_no_limit" = "No limit";
++"lng_blue_tag_saved" = "Blue tag saved";
+ "lng_rights_tag_about_self" = "Share your role, title, or how you're known in this group. Your tag is visible to all members.";
+ 
+ "lng_tag_info_title_user" = "Member Tags";
+diff --git a/Telegram/SourceFiles/boxes/peers/edit_participants_box.cpp b/Telegram/SourceFiles/boxes/peers/edit_participants_box.cpp
+index 1b9a996..f4f78b8 100644
+--- a/Telegram/SourceFiles/boxes/peers/edit_participants_box.cpp
++++ b/Telegram/SourceFiles/boxes/peers/edit_participants_box.cpp
+@@ -34,6 +34,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "ui/effects/outline_segments.h"
+ #include "ui/layers/generic_box.h"
+ #include "ui/vertical_list.h"
++#include "ui/wrap/vertical_layout.h"
++#include "ui/wrap/slide_wrap.h"
++#include "ui/widgets/checkbox.h"
+ #include "ui/widgets/fields/input_field.h"
+ #include "ui/widgets/menu/menu_multiline_action.h"
+ #include "ui/widgets/popup_menu.h"
+@@ -43,6 +46,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "history/history.h"
+ #include "history/view/history_view_message.h"
+ #include "styles/style_chat.h"
++#include "styles/style_edit_peer_members.h"
+ #include "styles/style_menu_icons.h"
+ 
+ namespace {
+@@ -2999,6 +3003,190 @@ void ParticipantsBoxSearchController::searchDone(
+ 	delegate()->peerListSearchRefreshRows();
+ }
+ 
++namespace {
++
++constexpr auto kBlueTagDay = TimeId(86400);
++
++struct BlueTagPerksState {
++	Ui::Checkbox *blue = nullptr;
++	Ui::Checkbox *free = nullptr;
++	std::shared_ptr<Ui::RadiobuttonGroup> slowmode;
++	std::shared_ptr<Ui::RadiobuttonGroup> duration;
++	std::shared_ptr<Ui::RadiobuttonGroup> limit;
++	std::optional<Data::ChannelTagPerks> initial;
++
++	[[nodiscard]] std::optional<Data::ChannelTagPerks> current() const {
++		if (!blue->checked()) {
++			return std::nullopt;
++		}
++		const auto duration = this->duration->current();
++		return Data::ChannelTagPerks{
++			.freeMessages = free->checked(),
++			.slowmodeSeconds = slowmode->current(),
++			.until = duration ? (base::unixtime::now() + duration) : 0,
++			.messagesLimit = limit->current(),
++		};
++	}
++};
++
++[[nodiscard]] BlueTagPerksState *AddBlueTagSection(
++		not_null<Ui::GenericBox*> box,
++		not_null<PeerData*> peer,
++		not_null<UserData*> user,
++		HistoryView::BadgeRole role,
++		bool isSelf,
++		not_null<EditTagControl*> control) {
++	const auto channel = peer->asChannel();
++	if (!channel
++		|| !channel->isMegagroup()
++		|| isSelf
++		|| !channel->canBanMembers()
++		|| (role != HistoryView::BadgeRole::User)) {
++		return nullptr;
++	}
++	const auto state = box->lifetime().make_state<BlueTagPerksState>();
++	const auto container = box->verticalLayout();
++	state->blue = container->add(
++		object_ptr<Ui::Checkbox>(
++			container,
++			tr::lng_blue_tag_section(tr::now),
++			false,
++			st::rightsCheckbox,
++			std::make_unique<Ui::ToggleView>(st::rightsToggle, false)),
++		st::rightsToggleMargin);
++	const auto options = container->add(
++		object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
++			container,
++			object_ptr<Ui::VerticalLayout>(container)));
++	options->toggle(false, anim::type::instant);
++	const auto inner = options->entity();
++	state->free = inner->add(
++		object_ptr<Ui::Checkbox>(
++			inner,
++			tr::lng_blue_tag_free(tr::now),
++			true,
++			st::rightsCheckbox,
++			std::make_unique<Ui::ToggleView>(st::rightsToggle, true)),
++		st::rightsToggleMargin);
++	Ui::AddDividerText(
++		inner,
++		tr::lng_blue_tag_about(lt_name, rpl::single(user->shortName())));
++
++	const auto addGroup = [&](
++			rpl::producer<QString> title,
++			int initial,
++			std::vector<std::pair<int, QString>> variants) {
++		Ui::AddSubsectionTitle(inner, std::move(title));
++		const auto group = std::make_shared<Ui::RadiobuttonGroup>(initial);
++		for (const auto &[value, text] : variants) {
++			inner->add(
++				object_ptr<Ui::Radiobutton>(
++					inner,
++					group,
++					value,
++					text,
++					st::defaultCheckbox),
++				st::rightsToggleMargin);
++		}
++		return group;
++	};
++	const auto seconds = [](int value) {
++		return tr::lng_blue_tag_seconds(tr::now, lt_value, QString::number(value));
++	};
++	const auto minutes = [](int value) {
++		return tr::lng_blue_tag_minutes(tr::now, lt_value, QString::number(value));
++	};
++	state->slowmode = addGroup(tr::lng_blue_tag_slowmode(), 30, {
++		{ 0, tr::lng_blue_tag_off(tr::now) },
++		{ 10, seconds(10) },
++		{ 30, seconds(30) },
++		{ 60, minutes(1) },
++		{ 300, minutes(5) },
++	});
++	state->duration = addGroup(tr::lng_blue_tag_duration(), 7 * kBlueTagDay, {
++		{ kBlueTagDay, tr::lng_blue_tag_day1(tr::now) },
++		{ 7 * kBlueTagDay, tr::lng_blue_tag_days7(tr::now) },
++		{ 0, tr::lng_blue_tag_forever(tr::now) },
++	});
++	state->limit = addGroup(tr::lng_blue_tag_limit(), 50, {
++		{ 10, u"10"_q },
++		{ 50, u"50"_q },
++		{ 0, tr::lng_blue_tag_no_limit(tr::now) },
++	});
++
++	state->blue->checkedChanges(
++	) | rpl::on_next([=](bool checked) {
++		options->toggle(checked, anim::type::normal);
++		control->setBlue(checked);
++	}, state->blue->lifetime());
++
++	// The member's current perks, to edit them.
++	channel->session().api().request(MTPchannels_GetParticipant(
++		channel->inputChannel(),
++		user->input()
++	)).done(crl::guard(box, [=](
++			const MTPchannels_ChannelParticipant &result) {
++		const auto &participant = result.data().vparticipant();
++		const auto perks = participant.match([](
++				const MTPDchannelParticipant &data)
++		-> const MTPChatMemberTagPerks* {
++			const auto perks = data.vtag_perks();
++			return perks ? &*perks : nullptr;
++		}, [](const auto &) -> const MTPChatMemberTagPerks* {
++			return nullptr;
++		});
++		if (!perks) {
++			return;
++		}
++		const auto parsed = Data::ParseTagPerks(*perks);
++		if (!parsed.active(base::unixtime::now())) {
++			return;
++		}
++		state->initial = parsed;
++		state->free->setChecked(parsed.freeMessages);
++		state->slowmode->setValue(parsed.slowmodeSeconds);
++		state->duration->setValue(!parsed.until
++			? 0
++			: (parsed.until - base::unixtime::now() > kBlueTagDay)
++			? 7 * kBlueTagDay
++			: kBlueTagDay);
++		state->limit->setValue(parsed.messagesLimit);
++		state->blue->setChecked(true);
++		// What was loaded is the starting point, rounded to the variants.
++		state->initial = state->current();
++		if (state->initial) {
++			state->initial->until = parsed.until;
++		}
++	})).send();
++
++	return state;
++}
++
++} // namespace
++
++void SaveMemberTagPerks(
++		std::shared_ptr<Ui::Show> show,
++		not_null<ChannelData*> channel,
++		not_null<UserData*> user,
++		std::optional<Data::ChannelTagPerks> perks) {
++	using Flag = MTPchannels_EditMemberTagPerks::Flag;
++	channel->session().api().request(MTPchannels_EditMemberTagPerks(
++		MTP_flags(perks ? Flag::f_perks : Flag()),
++		channel->inputChannel(),
++		user->input(),
++		Data::SerializeTagPerks(perks.value_or(Data::ChannelTagPerks()))
++	)).done([=](const MTPUpdates &result) {
++		channel->session().api().applyUpdates(result);
++		if (show && perks) {
++			show->showToast(tr::lng_blue_tag_saved(tr::now));
++		}
++	}).fail([=](const MTP::Error &error) {
++		if (show) {
++			show->showToast(error.type());
++		}
++	}).send();
++}
++
+ void EditCustomRankBox(
+ 		not_null<Ui::GenericBox*> box,
+ 		std::shared_ptr<Ui::Show> show,
+@@ -3033,6 +3221,10 @@ void EditCustomRankBox(
+ 				rpl::single(user->shortName()))));
+ 	const auto field = control->field();
+ 
++	// Blue Tag: free messages and a personal slow mode,
++	// for a time or a number of messages.
++	const auto perks = AddBlueTagSection(box, peer, user, role, isSelf, control);
++
+ 	box->setFocusCallback([=] { field->setFocusFast(); });
+ 
+ 	const auto close = crl::guard(box, [=] { box->closeBox(); });
+@@ -3040,14 +3232,35 @@ void EditCustomRankBox(
+ 		if (state->saving) {
+ 			return;
+ 		}
+-		state->saving = true;
+ 		const auto rank = control->currentRank();
++		const auto newPerks = perks ? perks->current() : std::nullopt;
++		const auto perksChanged = perks && (newPerks != perks->initial);
++		if (perksChanged && newPerks && rank.isEmpty()) {
++			// TAG_PERKS_RANK_EMPTY: the perks go with a tag.
++			field->showError();
++			return;
++		}
++		state->saving = true;
++		const auto savePerks = [=] {
++			if (perksChanged) {
++				SaveMemberTagPerks(show, peer->asChannel(), user, newPerks);
++			}
++		};
++		if (rank == currentRank && perksChanged) {
++			savePerks();
++			if (onSaved) {
++				onSaved(rank);
++			}
++			close();
++			return;
++		}
+ 		SaveMemberRank(
+ 			show,
+ 			peer,
+ 			user,
+ 			rank,
+ 			[=] {
++				savePerks();
+ 				if (onSaved) {
+ 					onSaved(rank);
+ 				}
+diff --git a/Telegram/SourceFiles/boxes/peers/edit_participants_box.h b/Telegram/SourceFiles/boxes/peers/edit_participants_box.h
+index a723798..43adeb1 100644
+--- a/Telegram/SourceFiles/boxes/peers/edit_participants_box.h
++++ b/Telegram/SourceFiles/boxes/peers/edit_participants_box.h
+@@ -17,6 +17,10 @@ class PeerListStories;
+ struct ChatAdminRightsInfo;
+ struct ChatRestrictionsInfo;
+ 
++namespace Data {
++struct ChannelTagPerks;
++} // namespace Data
++
+ namespace Ui {
+ class Show;
+ } // namespace Ui
+@@ -59,6 +63,13 @@ void EditCustomRankBox(
+ 	bool isSelf,
+ 	Fn<void(QString rank)> onSaved);
+ 
++// Blue Tag: gives a member perks, or takes them away without perks.
++void SaveMemberTagPerks(
++	std::shared_ptr<Ui::Show> show,
++	not_null<ChannelData*> channel,
++	not_null<UserData*> user,
++	std::optional<Data::ChannelTagPerks> perks);
++
+ void SaveMemberRank(
+ 	std::shared_ptr<Ui::Show> show,
+ 	not_null<PeerData*> peer,
+diff --git a/Telegram/SourceFiles/boxes/peers/edit_tag_control.cpp b/Telegram/SourceFiles/boxes/peers/edit_tag_control.cpp
+index 0a9afa0..261ae53 100644
+--- a/Telegram/SourceFiles/boxes/peers/edit_tag_control.cpp
++++ b/Telegram/SourceFiles/boxes/peers/edit_tag_control.cpp
+@@ -190,6 +190,7 @@ public:
+ 	~PreviewWidget();
+ 
+ 	void setTagText(const QString &text);
++	void setBlue(bool blue);
+ 
+ private:
+ 	void paintEvent(QPaintEvent *e) override;
+@@ -199,6 +200,7 @@ private:
+ 	const not_null<History*> _history;
+ 	const not_null<UserData*> _user;
+ 	const HistoryView::BadgeRole _role;
++	bool _blue = false;
+ 	const std::unique_ptr<Ui::ChatTheme> _theme;
+ 	const std::unique_ptr<Ui::ChatStyle> _style;
+ 	const std::unique_ptr<TagPreviewDelegate> _delegate;
+@@ -303,7 +305,21 @@ void EditTagControl::PreviewWidget::applyBadge(const QString &text) {
+ 			badgeText = tr::lng_owner_badge(tr::now);
+ 		}
+ 	}
+-	_item->overrideRightBadge(badgeText, _role);
++	_item->overrideRightBadge(
++		badgeText,
++		(_blue && !badgeText.isEmpty()) ? HistoryView::BadgeRole::Blue : _role);
++}
++
++void EditTagControl::PreviewWidget::setBlue(bool blue) {
++	if (_blue != blue) {
++		_blue = blue;
++		applyBadge(_delegate->tagText());
++		update();
++	}
++}
++
++void EditTagControl::setBlue(bool blue) {
++	_preview->setBlue(blue);
+ }
+ 
+ void EditTagControl::PreviewWidget::setTagText(const QString &text) {
+diff --git a/Telegram/SourceFiles/boxes/peers/edit_tag_control.h b/Telegram/SourceFiles/boxes/peers/edit_tag_control.h
+index ba6e641..8ba4581 100644
+--- a/Telegram/SourceFiles/boxes/peers/edit_tag_control.h
++++ b/Telegram/SourceFiles/boxes/peers/edit_tag_control.h
+@@ -41,6 +41,9 @@ public:
+ 	[[nodiscard]] QString currentRank() const;
+ 	[[nodiscard]] not_null<Ui::InputField*> field() const;
+ 
++	// Blue Tag: the preview shows the tag blue while perks are on.
++	void setBlue(bool blue);
++
+ private:
+ 	class PreviewWidget;
+ 
+diff --git a/Telegram/SourceFiles/boxes/peers/tag_info_box.cpp b/Telegram/SourceFiles/boxes/peers/tag_info_box.cpp
+index 85758e7..dbe39a9 100644
+--- a/Telegram/SourceFiles/boxes/peers/tag_info_box.cpp
++++ b/Telegram/SourceFiles/boxes/peers/tag_info_box.cpp
+@@ -44,6 +44,8 @@ constexpr auto kTextLinesAlpha = 0.1;
+ 		? st::rankOwnerFg->c
+ 		: (role == BadgeRole::Admin)
+ 		? st::rankAdminFg->c
++		: (role == BadgeRole::Blue)
++		? st::historyPeer6NameFg->c
+ 		: st::rankUserFg->c;
+ }
+ 
+diff --git a/Telegram/SourceFiles/data/data_channel.cpp b/Telegram/SourceFiles/data/data_channel.cpp
+index 6444659..e4ba29d 100644
+--- a/Telegram/SourceFiles/data/data_channel.cpp
++++ b/Telegram/SourceFiles/data/data_channel.cpp
+@@ -992,6 +992,9 @@ void ChannelData::setMigrateFromChat(ChatData *chat) {
+ }
+ 
+ int ChannelData::slowmodeSeconds() const {
++	if (const auto perks = myActiveTagPerks()) {
++		return perks->slowmodeSeconds; // Blue Tag: personal slow mode
++	}
+ 	if (const auto info = mgInfo.get()) {
+ 		return info->slowmodeSeconds;
+ 	}
+@@ -1031,6 +1034,57 @@ void ChannelData::growSlowmodeLastMessage(TimeId when) {
+ 	session().changes().peerUpdated(this, UpdateFlag::Slowmode);
+ }
+ 
++namespace Data {
++
++ChannelTagPerks ParseTagPerks(const MTPChatMemberTagPerks &data) {
++	const auto &fields = data.data();
++	return {
++		.freeMessages = fields.is_free_messages(),
++		.slowmodeSeconds = fields.vslowmode_seconds().value_or_empty(),
++		.until = fields.vuntil_date().value_or_empty(),
++		.messagesLimit = fields.vmessages_limit().value_or_empty(),
++		.messagesUsed = fields.vmessages_used().value_or_empty(),
++	};
++}
++
++MTPChatMemberTagPerks SerializeTagPerks(const ChannelTagPerks &perks) {
++	using Flag = MTPDchatMemberTagPerks::Flag;
++	return MTP_chatMemberTagPerks(
++		MTP_flags((perks.freeMessages ? Flag::f_free_messages : Flag())
++			| (perks.slowmodeSeconds ? Flag::f_slowmode_seconds : Flag())
++			| (perks.until ? Flag::f_until_date : Flag())
++			| (perks.messagesLimit ? Flag::f_messages_limit : Flag())),
++		MTP_int(perks.slowmodeSeconds),
++		MTP_int(perks.until),
++		MTP_int(perks.messagesLimit),
++		MTP_int(0));
++}
++
++} // namespace Data
++
++void ChannelData::setMyTagPerks(std::optional<Data::ChannelTagPerks> perks) {
++	if (_myTagPerks == perks) {
++		return;
++	}
++	_myTagPerks = perks;
++	session().changes().peerUpdated(
++		this,
++		UpdateFlag::Rights | UpdateFlag::Slowmode);
++}
++
++const Data::ChannelTagPerks *ChannelData::myActiveTagPerks() const {
++	return (_myTagPerks && _myTagPerks->active(base::unixtime::now()))
++		? &*_myTagPerks
++		: nullptr;
++}
++
++void ChannelData::countMyTagPerksMessage() {
++	if (myActiveTagPerks()) {
++		++_myTagPerks->messagesUsed;
++		session().changes().peerUpdated(this, UpdateFlag::Rights);
++	}
++}
++
+ int ChannelData::starsPerMessage() const {
+ 	return _starsPerMessage;
+ }
+diff --git a/Telegram/SourceFiles/data/data_channel.h b/Telegram/SourceFiles/data/data_channel.h
+index 79600bd..511674c 100644
+--- a/Telegram/SourceFiles/data/data_channel.h
++++ b/Telegram/SourceFiles/data/data_channel.h
+@@ -20,6 +20,35 @@ class ChannelData;
+ namespace Data {
+ class Forum;
+ class SavedMessages;
++
++// Blue Tag (see SPEC.md): perks an admin gave with a member tag.
++struct ChannelTagPerks {
++	bool freeMessages = false;
++	int slowmodeSeconds = 0;
++	TimeId until = 0;
++	int messagesLimit = 0;
++	int messagesUsed = 0;
++
++	[[nodiscard]] bool active(TimeId now) const {
++		return (!until || until > now)
++			&& (!messagesLimit || messagesUsed < messagesLimit);
++	}
++	[[nodiscard]] int messagesLeft() const {
++		return messagesLimit
++			? std::max(messagesLimit - messagesUsed, 0)
++			: -1;
++	}
++
++	friend inline bool operator==(
++		const ChannelTagPerks &,
++		const ChannelTagPerks &) = default;
++};
++
++[[nodiscard]] ChannelTagPerks ParseTagPerks(
++	const MTPChatMemberTagPerks &data);
++[[nodiscard]] MTPChatMemberTagPerks SerializeTagPerks(
++	const ChannelTagPerks &perks);
++
+ } // namespace Data
+ 
+ struct ChannelLocation {
+@@ -534,6 +563,11 @@ public:
+ 	[[nodiscard]] TimeId slowmodeLastMessage() const;
+ 	void growSlowmodeLastMessage(TimeId when);
+ 
++	// Blue Tag: my own perks in this chat, delivered on the channel.
++	void setMyTagPerks(std::optional<Data::ChannelTagPerks> perks);
++	[[nodiscard]] const Data::ChannelTagPerks *myActiveTagPerks() const;
++	void countMyTagPerksMessage();
++
+ 	void setStarsPerMessage(int stars);
+ 	[[nodiscard]] int starsPerMessage() const;
+ 	[[nodiscard]] int commonStarsPerMessage() const;
+@@ -645,6 +679,7 @@ private:
+ 	int _pendingRequestsCount = 0;
+ 	int _levelHint = 0;
+ 	int _starsPerMessage = 0;
++	std::optional<Data::ChannelTagPerks> _myTagPerks;
+ 	UserId _guardBotId = 0;
+ 
+ 	Data::AllowedReactions _allowedReactions;
+diff --git a/Telegram/SourceFiles/data/data_peer.cpp b/Telegram/SourceFiles/data/data_peer.cpp
+index 33a0313..6838cd2 100644
+--- a/Telegram/SourceFiles/data/data_peer.cpp
++++ b/Telegram/SourceFiles/data/data_peer.cpp
+@@ -1831,6 +1831,9 @@ bool PeerData::canRevokeFullHistory() const {
+ 
+ bool PeerData::slowmodeApplied() const {
+ 	if (const auto channel = asChannel()) {
++		if (const auto perks = channel->myActiveTagPerks()) {
++			return perks->slowmodeSeconds > 0; // Blue Tag: personal slow mode
++		}
+ 		return !channel->amCreator()
+ 			&& !channel->hasAdminRights()
+ 			&& (channel->flags() & ChannelDataFlag::SlowmodeEnabled);
+@@ -1940,6 +1943,10 @@ int PeerData::starsPerMessageChecked() const {
+ 			|| amMonoforumAdmin()) {
+ 			return 0;
+ 		}
++		if (const auto perks = channel->myActiveTagPerks()
++			; perks && perks->freeMessages) {
++			return 0; // Blue Tag: free messages
++		}
+ 	}
+ 	return starsPerMessage();
+ }
+diff --git a/Telegram/SourceFiles/data/data_session.cpp b/Telegram/SourceFiles/data/data_session.cpp
+index 85479ba..dc2ad6b 100644
+--- a/Telegram/SourceFiles/data/data_session.cpp
++++ b/Telegram/SourceFiles/data/data_session.cpp
+@@ -1175,6 +1175,13 @@ not_null<PeerData*> Session::processChat(const MTPChat &data) {
+ 		} else {
+ 			_commonStarsPerMessage.remove(channel);
+ 		}
++		if (!minimal) {
++			// Blue Tag: my perks come with the channel, as admin_rights do.
++			const auto perks = data.vtag_perks();
++			channel->setMyTagPerks(perks
++				? std::make_optional(Data::ParseTagPerks(*perks))
++				: std::nullopt);
++		}
+ 		const auto storiesState = minimal
+ 			? std::optional<Data::Stories::PeerSourceState>()
+ 			: data.is_stories_unavailable()
+diff --git a/Telegram/SourceFiles/history/history.cpp b/Telegram/SourceFiles/history/history.cpp
+index 9219083..dd4439a 100644
+--- a/Telegram/SourceFiles/history/history.cpp
++++ b/Telegram/SourceFiles/history/history.cpp
+@@ -1685,6 +1685,12 @@ void History::newItemAdded(not_null<HistoryItem*> item, NewAddType type) {
+ 		from->madeAction(item->date());
+ 	}
+ 	item->contributeToSlowmode();
++	if (const auto channel = peer->asChannel()) {
++		if (item->out() && !item->isService() && !item->isScheduled()) {
++			// Blue Tag: counted at once, the next channel update brings the true count.
++			channel->countMyTagPerksMessage();
++		}
++	}
+ 	auto notification = Data::ItemNotification{
+ 		.item = item,
+ 		.type = Data::ItemNotificationType::Message,
+diff --git a/Telegram/SourceFiles/history/history_item.cpp b/Telegram/SourceFiles/history/history_item.cpp
+index 823e058..0b947c6 100644
+--- a/Telegram/SourceFiles/history/history_item.cpp
++++ b/Telegram/SourceFiles/history/history_item.cpp
+@@ -676,6 +676,7 @@ HistoryItem::HistoryItem(
+ 		if (!rank->v.isEmpty()) {
+ 			AddComponents(HistoryMessageFromRank::Bit());
+ 			Get<HistoryMessageFromRank>()->rank = qs(*rank);
++			Get<HistoryMessageFromRank>()->blue = data.is_from_rank_blue();
+ 		}
+ 	}
+ 
+@@ -2600,6 +2601,7 @@ void HistoryItem::applyEdition(HistoryMessageEdition &&edition) {
+ 			AddComponents(HistoryMessageFromRank::Bit());
+ 		}
+ 		Get<HistoryMessageFromRank>()->rank = edition.fromRank;
++		Get<HistoryMessageFromRank>()->blue = edition.fromRankBlue;
+ 	} else {
+ 		RemoveComponents(HistoryMessageFromRank::Bit());
+ 	}
+@@ -2822,6 +2824,7 @@ void HistoryItem::applyStreamedDraftFinish(const MTPDmessage &data) {
+ 	if (const auto rank = data.vfrom_rank(); rank && !rank->v.isEmpty()) {
+ 		AddComponents(HistoryMessageFromRank::Bit());
+ 		Get<HistoryMessageFromRank>()->rank = qs(*rank);
++		Get<HistoryMessageFromRank>()->blue = data.is_from_rank_blue();
+ 	}
+ 	auto reasons = Data::UnavailableReason::Extract(
+ 		data.vrestriction_reason());
+@@ -4201,6 +4204,13 @@ QString HistoryItem::fromRank() const {
+ 	return QString();
+ }
+ 
++bool HistoryItem::fromRankBlue() const {
++	if (const auto component = Get<HistoryMessageFromRank>()) {
++		return component->blue;
++	}
++	return false;
++}
++
+ MsgId HistoryItem::originalId() const {
+ 	if (const auto forwarded = Get<HistoryMessageForwarded>()) {
+ 		return forwarded->originalId;
+diff --git a/Telegram/SourceFiles/history/history_item.h b/Telegram/SourceFiles/history/history_item.h
+index 95220ab..d1c84bb 100644
+--- a/Telegram/SourceFiles/history/history_item.h
++++ b/Telegram/SourceFiles/history/history_item.h
+@@ -684,6 +684,7 @@ public:
+ 	}
+ 
+ 	[[nodiscard]] QString fromRank() const;
++	[[nodiscard]] bool fromRankBlue() const;
+ 
+ 	MsgId id;
+ 
+diff --git a/Telegram/SourceFiles/history/history_item_components.h b/Telegram/SourceFiles/history/history_item_components.h
+index a3ace87..d50b44a 100644
+--- a/Telegram/SourceFiles/history/history_item_components.h
++++ b/Telegram/SourceFiles/history/history_item_components.h
+@@ -136,6 +136,7 @@ struct HistoryMessageSigned
+ struct HistoryMessageFromRank
+ : RuntimeComponent<HistoryMessageFromRank, HistoryItem> {
+ 	QString rank;
++	bool blue = false; // Blue Tag: the author had perks when it was sent
+ };
+ 
+ struct HistoryMessageEdited
+diff --git a/Telegram/SourceFiles/history/history_item_edition.cpp b/Telegram/SourceFiles/history/history_item_edition.cpp
+index 01c991e..9aaa0fb 100644
+--- a/Telegram/SourceFiles/history/history_item_edition.cpp
++++ b/Telegram/SourceFiles/history/history_item_edition.cpp
+@@ -44,6 +44,7 @@ HistoryMessageEdition::HistoryMessageEdition(
+ 	if (const auto rank = message.vfrom_rank()) {
+ 		fromRank = qs(*rank);
+ 	}
++	fromRankBlue = message.is_from_rank_blue();
+ 
+ 	const auto period = message.vttl_period();
+ 	ttl = (period && period->v > 0) ? (message.vdate().v + period->v) : 0;
+diff --git a/Telegram/SourceFiles/history/history_item_edition.h b/Telegram/SourceFiles/history/history_item_edition.h
+index 127b0dc..e9f315b 100644
+--- a/Telegram/SourceFiles/history/history_item_edition.h
++++ b/Telegram/SourceFiles/history/history_item_edition.h
+@@ -53,6 +53,7 @@ struct HistoryMessageEdition {
+ 	const MTPMessageReactions *mtpReactions = nullptr;
+ 	const MTPFactCheck *mtpFactcheck = nullptr;
+ 	QString fromRank;
++	bool fromRankBlue = false;
+ };
+ 
+ struct HistoryMessageContent {
+diff --git a/Telegram/SourceFiles/history/view/history_view_message.cpp b/Telegram/SourceFiles/history/view/history_view_message.cpp
+index 5ffd8ee..00ae052 100644
+--- a/Telegram/SourceFiles/history/view/history_view_message.cpp
++++ b/Telegram/SourceFiles/history/view/history_view_message.cpp
+@@ -1172,7 +1172,11 @@ void Message::refreshRightBadge() {
+ 		}
+ 		const auto fromRank = item->fromRank();
+ 		if (!fromRank.isEmpty()) {
+-			return { fromRank, BadgeRole::User, false };
++			return {
++				fromRank,
++				item->fromRankBlue() ? BadgeRole::Blue : BadgeRole::User,
++				false,
++			};
+ 		}
+ 		return { QString(), BadgeRole::User, false };
+ 	}();
+@@ -2713,6 +2717,8 @@ void Message::paintFromName(
+ 				? st::rankOwnerFg->c
+ 				: (badge->role == BadgeRole::Admin)
+ 				? st::rankAdminFg->c
++				: (badge->role == BadgeRole::Blue)
++				? st::historyPeer6NameFg->c
+ 				: st::rankUserFg->c;
+ 			const auto badgeLeft = trect.left()
+ 				+ trect.width()
+diff --git a/Telegram/SourceFiles/history/view/history_view_message.h b/Telegram/SourceFiles/history/view/history_view_message.h
+index 10d7d68..6ed3d44 100644
+--- a/Telegram/SourceFiles/history/view/history_view_message.h
++++ b/Telegram/SourceFiles/history/view/history_view_message.h
+@@ -137,6 +137,7 @@ enum class BadgeRole : uchar {
+ 	User,
+ 	Admin,
+ 	Creator,
++	Blue, // Blue Tag: a member's tag with perks
+ };
+ 
+ struct RightBadge : RuntimeComponent<RightBadge, Element> {
+diff --git a/Telegram/SourceFiles/mtproto/scheme/api.tl b/Telegram/SourceFiles/mtproto/scheme/api.tl
+index 4e29f2d..8e92a99 100644
+--- a/Telegram/SourceFiles/mtproto/scheme/api.tl
++++ b/Telegram/SourceFiles/mtproto/scheme/api.tl
+@@ -103,7 +103,7 @@ userStatusLastMonth#65899777 flags:# by_me:flags.0?true = UserStatus;
+ chatEmpty#29562865 id:long = Chat;
+ chat#41cbf256 flags:# creator:flags.0?true left:flags.2?true deactivated:flags.5?true call_active:flags.23?true call_not_empty:flags.24?true noforwards:flags.25?true id:long title:string photo:ChatPhoto participants_count:int date:int version:int migrated_to:flags.6?InputChannel admin_rights:flags.14?ChatAdminRights default_banned_rights:flags.18?ChatBannedRights = Chat;
+ chatForbidden#6592a1a7 id:long title:string = Chat;
+-channel#7ad15240 flags:# creator:flags.0?true left:flags.2?true broadcast:flags.5?true verified:flags.7?true megagroup:flags.8?true restricted:flags.9?true signatures:flags.11?true min:flags.12?true scam:flags.19?true has_link:flags.20?true has_geo:flags.21?true slowmode_enabled:flags.22?true call_active:flags.23?true call_not_empty:flags.24?true fake:flags.25?true gigagroup:flags.26?true noforwards:flags.27?true join_to_send:flags.28?true join_request:flags.29?true forum:flags.30?true flags2:# stories_hidden:flags2.1?true stories_hidden_min:flags2.2?true stories_unavailable:flags2.3?true signature_profiles:flags2.12?true autotranslation:flags2.15?true broadcast_messages_allowed:flags2.16?true monoforum:flags2.17?true forum_tabs:flags2.19?true in_news:flags2.21?true forum_sidebar:flags2.23?true id:long access_hash:flags.13?long title:string username:flags.6?string photo:ChatPhoto date:int restriction_reason:flags.9?Vector<RestrictionReason> admin_rights:flags.14?ChatAdminRights banned_rights:flags.15?ChatBannedRights default_banned_rights:flags.18?ChatBannedRights participants_count:flags.17?int usernames:flags2.0?Vector<Username> stories_max_id:flags2.4?RecentStory color:flags2.7?PeerColor profile_color:flags2.8?PeerColor emoji_status:flags2.9?EmojiStatus level:flags2.10?int subscription_until_date:flags2.11?int bot_verification_icon:flags2.13?long send_paid_messages_stars:flags2.14?long linked_monoforum_id:flags2.18?long linked_community_id:flags2.20?long pinned_msg_id:flags2.22?int = Chat;
++channel#6506067c flags:# creator:flags.0?true left:flags.2?true broadcast:flags.5?true verified:flags.7?true megagroup:flags.8?true restricted:flags.9?true signatures:flags.11?true min:flags.12?true scam:flags.19?true has_link:flags.20?true has_geo:flags.21?true slowmode_enabled:flags.22?true call_active:flags.23?true call_not_empty:flags.24?true fake:flags.25?true gigagroup:flags.26?true noforwards:flags.27?true join_to_send:flags.28?true join_request:flags.29?true forum:flags.30?true flags2:# stories_hidden:flags2.1?true stories_hidden_min:flags2.2?true stories_unavailable:flags2.3?true signature_profiles:flags2.12?true autotranslation:flags2.15?true broadcast_messages_allowed:flags2.16?true monoforum:flags2.17?true forum_tabs:flags2.19?true in_news:flags2.21?true forum_sidebar:flags2.23?true id:long access_hash:flags.13?long title:string username:flags.6?string photo:ChatPhoto date:int restriction_reason:flags.9?Vector<RestrictionReason> admin_rights:flags.14?ChatAdminRights banned_rights:flags.15?ChatBannedRights default_banned_rights:flags.18?ChatBannedRights participants_count:flags.17?int usernames:flags2.0?Vector<Username> stories_max_id:flags2.4?RecentStory color:flags2.7?PeerColor profile_color:flags2.8?PeerColor emoji_status:flags2.9?EmojiStatus level:flags2.10?int subscription_until_date:flags2.11?int bot_verification_icon:flags2.13?long send_paid_messages_stars:flags2.14?long linked_monoforum_id:flags2.18?long linked_community_id:flags2.20?long pinned_msg_id:flags2.22?int tag_perks:flags2.24?ChatMemberTagPerks = Chat;
+ channelForbidden#17d493d5 flags:# broadcast:flags.5?true megagroup:flags.8?true monoforum:flags.10?true id:long access_hash:long title:string until_date:flags.16?int = Chat;
+ communityForbidden#fd3cdab8 flags:# id:long access_hash:flags.13?long title:string = Chat;
+ community#65efe954 flags:# creator:flags.0?true left:flags.2?true min:flags.12?true flags2:# collapsed_in_dialogs:flags2.20?true id:long access_hash:flags.13?long title:string photo:ChatPhoto date:int admin_rights:flags.14?ChatAdminRights default_banned_rights:flags.18?ChatBannedRights = Chat;
+@@ -123,7 +123,7 @@ chatPhotoEmpty#37c1011c = ChatPhoto;
+ chatPhoto#1c6e1c11 flags:# has_video:flags.0?true photo_id:long stripped_thumb:flags.1?bytes dc_id:int = ChatPhoto;
+ 
+ messageEmpty#90a6ca84 flags:# id:int peer_id:flags.0?Peer = Message;
+-message#7600b9d3 flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true silent:flags.13?true post:flags.14?true from_scheduled:flags.18?true legacy:flags.19?true edit_hide:flags.21?true pinned:flags.24?true noforwards:flags.26?true invert_media:flags.27?true flags2:# offline:flags2.1?true video_processing_pending:flags2.4?true paid_suggested_post_stars:flags2.8?true paid_suggested_post_ton:flags2.9?true id:int from_id:flags.8?Peer from_boosts_applied:flags.29?int from_rank:flags2.12?string peer_id:Peer saved_peer_id:flags.28?Peer fwd_from:flags.2?MessageFwdHeader via_bot_id:flags.11?long via_business_bot_id:flags2.0?long guestchat_via_from:flags2.19?Peer reply_to:flags.3?MessageReplyHeader date:int message:string media:flags.9?MessageMedia reply_markup:flags.6?ReplyMarkup entities:flags.7?Vector<MessageEntity> views:flags.10?int forwards:flags.10?int replies:flags.23?MessageReplies edit_date:flags.15?int post_author:flags.16?string grouped_id:flags.17?long reactions:flags.20?MessageReactions restriction_reason:flags.22?Vector<RestrictionReason> ttl_period:flags.25?int quick_reply_shortcut_id:flags.30?int effect:flags2.2?long factcheck:flags2.3?FactCheck report_delivery_until_date:flags2.5?int paid_message_stars:flags2.6?long suggested_post:flags2.7?SuggestedPost schedule_repeat_period:flags2.10?int summary_from_language:flags2.11?string rich_message:flags2.13?RichMessage = Message;
++message#b917471c flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true silent:flags.13?true post:flags.14?true from_scheduled:flags.18?true legacy:flags.19?true edit_hide:flags.21?true pinned:flags.24?true noforwards:flags.26?true invert_media:flags.27?true flags2:# offline:flags2.1?true video_processing_pending:flags2.4?true paid_suggested_post_stars:flags2.8?true paid_suggested_post_ton:flags2.9?true id:int from_id:flags.8?Peer from_boosts_applied:flags.29?int from_rank:flags2.12?string from_rank_blue:flags2.20?true peer_id:Peer saved_peer_id:flags.28?Peer fwd_from:flags.2?MessageFwdHeader via_bot_id:flags.11?long via_business_bot_id:flags2.0?long guestchat_via_from:flags2.19?Peer reply_to:flags.3?MessageReplyHeader date:int message:string media:flags.9?MessageMedia reply_markup:flags.6?ReplyMarkup entities:flags.7?Vector<MessageEntity> views:flags.10?int forwards:flags.10?int replies:flags.23?MessageReplies edit_date:flags.15?int post_author:flags.16?string grouped_id:flags.17?long reactions:flags.20?MessageReactions restriction_reason:flags.22?Vector<RestrictionReason> ttl_period:flags.25?int quick_reply_shortcut_id:flags.30?int effect:flags2.2?long factcheck:flags2.3?FactCheck report_delivery_until_date:flags2.5?int paid_message_stars:flags2.6?long suggested_post:flags2.7?SuggestedPost schedule_repeat_period:flags2.10?int summary_from_language:flags2.11?string rich_message:flags2.13?RichMessage = Message;
+ messageService#7a800e0a flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true reactions_are_possible:flags.9?true silent:flags.13?true post:flags.14?true legacy:flags.19?true id:int from_id:flags.8?Peer peer_id:Peer saved_peer_id:flags.28?Peer reply_to:flags.3?MessageReplyHeader date:int action:MessageAction reactions:flags.20?MessageReactions ttl_period:flags.25?int = Message;
+ 
+ messageMediaEmpty#3ded6320 = MessageMedia;
+@@ -778,8 +778,8 @@ updates.channelDifference#2064674e flags:# final:flags.0?true pts:int timeout:fl
+ channelMessagesFilterEmpty#94d42ee7 = ChannelMessagesFilter;
+ channelMessagesFilter#cd77d957 flags:# exclude_new_messages:flags.1?true ranges:Vector<MessageRange> = ChannelMessagesFilter;
+ 
+-channelParticipant#1bd54456 flags:# user_id:long date:int subscription_until_date:flags.0?int rank:flags.2?string = ChannelParticipant;
+-channelParticipantSelf#a9478a1a flags:# via_request:flags.0?true user_id:long inviter_id:long date:int subscription_until_date:flags.1?int rank:flags.2?string = ChannelParticipant;
++channelParticipant#b8123bc8 flags:# user_id:long date:int subscription_until_date:flags.0?int rank:flags.2?string tag_perks:flags.3?ChatMemberTagPerks = ChannelParticipant;
++channelParticipantSelf#50cad9ee flags:# via_request:flags.0?true user_id:long inviter_id:long date:int subscription_until_date:flags.1?int rank:flags.2?string tag_perks:flags.3?ChatMemberTagPerks = ChannelParticipant;
+ channelParticipantCreator#2fe601d3 flags:# user_id:long admin_rights:ChatAdminRights rank:flags.0?string = ChannelParticipant;
+ channelParticipantAdmin#34c3bb53 flags:# can_edit:flags.0?true self:flags.1?true user_id:long inviter_id:flags.1?long promoted_by:long date:int admin_rights:ChatAdminRights rank:flags.2?string = ChannelParticipant;
+ channelParticipantBanned#d5f0ad91 flags:# left:flags.0?true peer:Peer kicked_by:long date:int banned_rights:ChatBannedRights rank:flags.2?string = ChannelParticipant;
+@@ -1135,6 +1135,7 @@ channelAdminLogEventActionToggleSignatureProfiles#60a79c79 new_value:Bool = Chan
+ channelAdminLogEventActionParticipantSubExtend#64642db3 prev_participant:ChannelParticipant new_participant:ChannelParticipant = ChannelAdminLogEventAction;
+ channelAdminLogEventActionToggleAutotranslation#c517f77e new_value:Bool = ChannelAdminLogEventAction;
+ channelAdminLogEventActionParticipantEditRank#5806b4ec user_id:long prev_rank:string new_rank:string = ChannelAdminLogEventAction;
++channelAdminLogEventActionParticipantEditTagPerks#4128ea6d flags:# user_id:long prev_perks:flags.0?ChatMemberTagPerks new_perks:flags.1?ChatMemberTagPerks = ChannelAdminLogEventAction;
+ 
+ channelAdminLogEvent#1fad68cd id:long date:int user_id:long action:ChannelAdminLogEventAction = ChannelAdminLogEvent;
+ 
+@@ -1304,6 +1305,7 @@ statsURL#47a971e0 url:string = StatsURL;
+ chatAdminRights#5fb224d5 flags:# change_info:flags.0?true post_messages:flags.1?true edit_messages:flags.2?true delete_messages:flags.3?true ban_users:flags.4?true invite_users:flags.5?true pin_messages:flags.7?true add_admins:flags.9?true anonymous:flags.10?true manage_call:flags.11?true other:flags.12?true manage_topics:flags.13?true post_stories:flags.14?true edit_stories:flags.15?true delete_stories:flags.16?true manage_direct_messages:flags.17?true manage_ranks:flags.18?true manage_linked_peers:flags.19?true manage_welcome_messages:flags.20?true = ChatAdminRights;
+ 
+ chatBannedRights#9f120418 flags:# view_messages:flags.0?true send_messages:flags.1?true send_media:flags.2?true send_stickers:flags.3?true send_gifs:flags.4?true send_games:flags.5?true send_inline:flags.6?true embed_links:flags.7?true send_polls:flags.8?true change_info:flags.10?true invite_users:flags.15?true pin_messages:flags.17?true manage_topics:flags.18?true send_photos:flags.19?true send_videos:flags.20?true send_roundvideos:flags.21?true send_audios:flags.22?true send_voices:flags.23?true send_docs:flags.24?true send_plain:flags.25?true edit_rank:flags.26?true send_reactions:flags.27?true manage_linked_peers:flags.28?true until_date:int = ChatBannedRights;
++chatMemberTagPerks#78b4ccb0 flags:# free_messages:flags.0?true slowmode_seconds:flags.1?int until_date:flags.2?int messages_limit:flags.3?int messages_used:flags.4?int = ChatMemberTagPerks;
+ 
+ inputWallPaper#e630b979 id:long access_hash:long = InputWallPaper;
+ inputWallPaperSlug#72091c80 slug:string = InputWallPaper;
+@@ -2934,6 +2936,7 @@ channels.reportSpam#f44a8315 channel:InputChannel participant:InputPeer id:Vecto
+ channels.getMessages#ad8c9a23 channel:InputChannel id:Vector<InputMessage> = messages.Messages;
+ channels.getParticipants#77ced9d0 channel:InputChannel filter:ChannelParticipantsFilter offset:int limit:int hash:long = channels.ChannelParticipants;
+ channels.getParticipant#a0ab6cc6 channel:InputChannel participant:InputPeer = channels.ChannelParticipant;
++channels.editMemberTagPerks#72de3d23 flags:# channel:InputChannel participant:InputPeer perks:flags.0?ChatMemberTagPerks = Updates;
+ channels.getChannels#a7f6bbb id:Vector<InputChannel> = messages.Chats;
+ channels.getFullChannel#8736a09 channel:InputChannel = messages.ChatFull;
+ channels.createChannel#91006707 flags:# broadcast:flags.0?true megagroup:flags.1?true for_import:flags.3?true forum:flags.5?true title:string about:string geo_point:flags.2?InputGeoPoint address:flags.2?string ttl_period:flags.4?int = Updates;

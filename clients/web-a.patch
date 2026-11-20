@@ -1,0 +1,1458 @@
+diff --git a/src/api/gramjs/apiBuilders/chats.ts b/src/api/gramjs/apiBuilders/chats.ts
+index 8331282..78ddb23 100644
+--- a/src/api/gramjs/apiBuilders/chats.ts
++++ b/src/api/gramjs/apiBuilders/chats.ts
+@@ -13,6 +13,7 @@ import {
+   type ApiChatlistExportedInvite,
+   type ApiChatlistInvite,
+   type ApiChatMember,
++  type ApiChatMemberTagPerks,
+   type ApiChatReactions,
+   type ApiExportedInvite,
+   type ApiMissingInvitedUser,
+@@ -139,6 +140,7 @@ function buildApiChatFieldsFromPeerEntity(
+     hasGeo: channel?.hasGeo,
+     subscriptionUntil: channel?.subscriptionUntilDate,
+     paidMessagesStars: toJSNumber(paidMessagesStars),
++    ...(channel && !isMin && { tagPerks: channel.tagPerks ? buildApiChatMemberTagPerks(channel.tagPerks) : undefined }),
+     level: channel?.level,
+     hasAutoTranslation: channel?.autotranslation,
+     withForumTabs: channel?.forumTabs,
+@@ -353,6 +355,16 @@ function getUserName(user: GramJs.User) {
+     : (user.lastName || '');
+ }
+ 
++export function buildApiChatMemberTagPerks(perks: GramJs.TypeChatMemberTagPerks): ApiChatMemberTagPerks {
++  return {
++    isFreeMessages: perks.freeMessages,
++    slowModeSeconds: perks.slowmodeSeconds,
++    untilDate: perks.untilDate,
++    messagesLimit: perks.messagesLimit,
++    messagesUsed: perks.messagesUsed,
++  };
++}
++
+ export function buildChatMember(
+   member: GramJs.TypeChatParticipant | GramJs.TypeChannelParticipant,
+ ): ApiChatMember | undefined {
+@@ -363,6 +375,7 @@ export function buildChatMember(
+   return {
+     userId,
+     rank: 'rank' in member ? member.rank : undefined,
++    tagPerks: 'tagPerks' in member && member.tagPerks ? buildApiChatMemberTagPerks(member.tagPerks) : undefined,
+     inviterId: 'inviterId' in member && member.inviterId
+       ? buildApiPeerId(member.inviterId, 'user')
+       : undefined,
+diff --git a/src/api/gramjs/apiBuilders/messages.ts b/src/api/gramjs/apiBuilders/messages.ts
+index 29d5f19..cdc2904 100644
+--- a/src/api/gramjs/apiBuilders/messages.ts
++++ b/src/api/gramjs/apiBuilders/messages.ts
+@@ -334,6 +334,7 @@ export function buildApiMessageWithChatId(
+     restrictionReasons,
+     summaryLanguageCode: mtpMessage.summaryFromLanguage,
+     fromRank: mtpMessage.fromRank,
++    isFromRankBlue: mtpMessage.fromRankBlue,
+     guestChatViaId: mtpMessage.guestchatViaFrom && getApiChatIdFromMtpPeer(mtpMessage.guestchatViaFrom),
+   };
+ }
+diff --git a/src/api/gramjs/methods/messages.ts b/src/api/gramjs/methods/messages.ts
+index 88deca1..e53be38 100644
+--- a/src/api/gramjs/methods/messages.ts
++++ b/src/api/gramjs/methods/messages.ts
+@@ -12,6 +12,7 @@ import type {
+   ApiAttachment,
+   ApiAudio,
+   ApiChat,
++  ApiChatMemberTagPerks,
+   ApiComposedMessageWithAI,
+   ApiFormattedText,
+   ApiGlobalMessageSearchType,
+@@ -1594,6 +1595,27 @@ export function editChatParticipantRank({
+   });
+ }
+ 
++export function editChatMemberTagPerks({
++  chat, peer, perks,
++}: {
++  chat: ApiChat;
++  peer: ApiPeer;
++  perks?: ApiChatMemberTagPerks;
++}) {
++  return invokeRequest(new GramJs.channels.EditMemberTagPerks({
++    channel: buildInputChannel(chat.id, chat.accessHash),
++    participant: buildInputPeer(peer.id, peer.accessHash),
++    perks: perks ? new GramJs.ChatMemberTagPerks({
++      freeMessages: perks.isFreeMessages,
++      slowmodeSeconds: perks.slowModeSeconds || undefined,
++      untilDate: perks.untilDate,
++      messagesLimit: perks.messagesLimit,
++    }) : undefined,
++  }), {
++    shouldReturnTrue: true,
++  });
++}
++
+ export function deleteScheduledMessages({
+   chat, messageIds,
+ }: {
+diff --git a/src/api/types/chats.ts b/src/api/types/chats.ts
+index ad77d51..7933af8 100644
+--- a/src/api/types/chats.ts
++++ b/src/api/types/chats.ts
+@@ -113,6 +113,8 @@ export interface ApiChat {
+ 
+   paidMessagesStars?: number;
+   ttlPeriod?: number;
++  // Blue Tag perks of the current user in this chat
++  tagPerks?: ApiChatMemberTagPerks;
+ }
+ 
+ type ApiTypingStatusBase = {
+@@ -203,9 +205,18 @@ export interface ApiChatFullInfo {
+   peerLinkRequestsCount?: number;
+ }
+ 
++export interface ApiChatMemberTagPerks {
++  isFreeMessages?: true;
++  slowModeSeconds?: number;
++  untilDate?: number;
++  messagesLimit?: number;
++  messagesUsed?: number;
++}
++
+ export interface ApiChatMember {
+   userId: string;
+   rank?: string;
++  tagPerks?: ApiChatMemberTagPerks;
+   inviterId?: string;
+   joinedDate?: number;
+   kickedByUserId?: string;
+diff --git a/src/api/types/messages.ts b/src/api/types/messages.ts
+index 3614708..4d92199 100644
+--- a/src/api/types/messages.ts
++++ b/src/api/types/messages.ts
+@@ -871,6 +871,7 @@ export interface ApiMessage {
+   restrictionReasons?: ApiRestrictionReason[];
+   summaryLanguageCode?: string;
+   fromRank?: string;
++  isFromRankBlue?: true;
+ 
+   isTypingDraft?: boolean; // Local field
+   typingDraft?: {
+diff --git a/src/assets/localization/fallback.strings b/src/assets/localization/fallback.strings
+index 382a117..752f3e7 100644
+--- a/src/assets/localization/fallback.strings
++++ b/src/assets/localization/fallback.strings
+@@ -4740,3 +4740,19 @@
+ "SettingsKeywordsLogOut" = "log out, sign out, exit";
+ "SettingsKeywordsShortcuts" = "hotkeys, shortcuts, keyboard, keys, keybindings";
+ "SettingsSearchEmpty" = "Start typing to find a setting";
++"BlueTagSection" = "Blue Tag";
++"BlueTagFreeMessages" = "Free messages";
++"BlueTagInfo" = "{user} can write without paying Stars. No admin rights are given.";
++"BlueTagSlowMode" = "Personal slow mode";
++"BlueTagDuration" = "Duration";
++"BlueTagLimit" = "Message limit";
++"BlueTagOff" = "Off";
++"BlueTagSecondsShort" = "{count}s";
++"BlueTagMinutesShort" = "{count}m";
++"BlueTagDay1" = "1 day";
++"BlueTagDays7" = "7 days";
++"BlueTagForever" = "Forever";
++"BlueTagNoLimit" = "No limit";
++"BlueTagPlaceholderLeft" = "Free · {count} left";
++"BlueTagPlaceholder" = "Free message";
++"BlueTagSaved" = "Blue tag saved";
+diff --git a/src/components/common/Composer.tsx b/src/components/common/Composer.tsx
+index 7955651..50e7e76 100644
+--- a/src/components/common/Composer.tsx
++++ b/src/components/common/Composer.tsx
+@@ -13,6 +13,7 @@ import type {
+   ApiBotMenuButton,
+   ApiChat,
+   ApiChatFullInfo,
++  ApiChatMemberTagPerks,
+   ApiDisallowedGifts,
+   ApiDraft,
+   ApiFormattedText,
+@@ -71,6 +72,7 @@ import {
+   getPhotoFullDimensions,
+   getReactionKey,
+   getStoryKey,
++  getTagPerksMessagesLeft,
+   hasMessageMedia,
+   isChatAdmin,
+   isChatChannel,
+@@ -78,6 +80,7 @@ import {
+   isChatSuperGroup,
+   isSameReaction,
+   isSystemBot,
++  isTagPerksActive,
+   isUserRightBanned,
+ } from '../../global/helpers';
+ import { getChatNotifySettings } from '../../global/helpers/notifications';
+@@ -326,6 +329,7 @@ type StateProps = {
+   canSendVoiceByPrivacy?: boolean;
+   attachmentSettings: GlobalState['attachmentSettings'];
+   slowMode?: ApiChatFullInfo['slowMode'];
++  blueTagPerks?: ApiChatMemberTagPerks;
+   shouldUpdateStickerSetOrder?: boolean;
+   availableReactions?: ApiAvailableReaction[];
+   topReactions?: ApiReaction[];
+@@ -469,7 +473,8 @@ const Composer = ({
+   attachMenuPeerType,
+   attachmentSettings,
+   theme,
+-  slowMode,
++  slowMode: chatSlowMode,
++  blueTagPerks,
+   shouldUpdateStickerSetOrder,
+   editableInputCssSelector,
+   editableInputId,
+@@ -569,6 +574,18 @@ const Composer = ({
+ 
+   const [isMounted, setIsMounted] = useState(false);
+   const lastMessageSendTimeSecondsRef = useRef<number>();
++  // Blue Tag: personal slow mode replaces the chat-wide one
++  const [personalNextSendDate, setPersonalNextSendDate] = useState<number>();
++  const personalSlowMode = blueTagPerks?.slowModeSeconds
++    ? { seconds: blueTagPerks.slowModeSeconds, nextSendDate: personalNextSendDate }
++    : undefined;
++  const slowMode = blueTagPerks ? personalSlowMode : chatSlowMode;
++  const chatPaidMessagesStars = chat?.paidMessagesStars;
++  const markMessageSent = useLastCallback(() => {
++    const now = getServerTime();
++    lastMessageSendTimeSecondsRef.current = now;
++    if (blueTagPerks?.slowModeSeconds) setPersonalNextSendDate(now + blueTagPerks.slowModeSeconds);
++  });
+   const prevDropAreaState = usePreviousDeprecated(dropAreaState);
+   const { width: windowWidth } = windowSize.get();
+   const forceUpdate = useForceUpdate();
+@@ -1557,7 +1574,7 @@ const Composer = ({
+       });
+     }
+ 
+-    lastMessageSendTimeSecondsRef.current = getServerTime();
++    markMessageSent();
+ 
+     clearDraft({ chatId, threadId, isLocalOnly: true });
+ 
+@@ -1674,7 +1691,7 @@ const Composer = ({
+           });
+         }
+ 
+-        lastMessageSendTimeSecondsRef.current = getServerTime();
++        markMessageSent();
+         clearDraft({
+           chatId, threadId, isLocalOnly: true, shouldKeepReply: isForwarding,
+         });
+@@ -1720,7 +1737,7 @@ const Composer = ({
+         });
+       }
+ 
+-      lastMessageSendTimeSecondsRef.current = getServerTime();
++      markMessageSent();
+       clearDraft({
+         chatId, threadId, isLocalOnly: true, shouldKeepReply: isForwarding,
+       });
+@@ -2497,6 +2514,12 @@ const Composer = ({
+       if (slowModePlaceholder) return slowModePlaceholder;
+       if (isBotKeyboardOpen && botKeyboardPlaceholder) return botKeyboardPlaceholder;
+       if (inputPlaceholder) return inputPlaceholder;
++      if (blueTagPerks?.isFreeMessages && chatPaidMessagesStars) {
++        const messagesLeft = getTagPerksMessagesLeft(blueTagPerks);
++        return messagesLeft !== undefined
++          ? lang('BlueTagPlaceholderLeft', { count: messagesLeft })
++          : lang('BlueTagPlaceholder');
++      }
+       if (paidMessagesStars) {
+         return lang('ComposerPlaceholderPaidMessage', {
+           amount: formatStarsAsIcon(lang, paidMessagesStars, { asFont: true, className: 'placeholder-star-icon' }),
+@@ -2541,6 +2564,7 @@ const Composer = ({
+     activeRecording, botKeyboardPlaceholder, chat, inputPlaceholder, isBotKeyboardOpen, isChannel, isComposerBlocked,
+     isInStoryViewer, isSilentPosting, lang, replyToTopic, isReplying, threadId, windowWidth, paidMessagesStars,
+     hasSuggestedPost, slowModePlaceholder, stealthMode?.activeUntil, user?.canManageBotForumTopics,
++    blueTagPerks, chatPaidMessagesStars,
+   ]);
+ 
+   useEffect(() => {
+@@ -3636,6 +3660,7 @@ export default memo(withGlobal<OwnProps>(
+       canSendVoiceByPrivacy,
+       attachmentSettings: global.attachmentSettings,
+       slowMode,
++      blueTagPerks: chat && isTagPerksActive(chat.tagPerks) ? chat.tagPerks : undefined,
+       currentMessageList,
+       isReactionPickerOpen: selectIsReactionPickerOpen(global),
+       canBuyPremium: !isCurrentUserPremium && !selectIsPremiumPurchaseBlocked(global),
+diff --git a/src/components/common/RankBadge.tsx b/src/components/common/RankBadge.tsx
+index 9e52404..74e8045 100644
+--- a/src/components/common/RankBadge.tsx
++++ b/src/components/common/RankBadge.tsx
+@@ -1,6 +1,7 @@
+ import { memo } from '@teact';
+ import { getActions } from '../../global';
+ 
++import { BLUE_TAG_PEER_COLOR } from '../../global/helpers/blueTag';
+ import buildClassName from '../../util/buildClassName';
+ 
+ import useLang from '../../hooks/useLang';
+@@ -17,17 +18,19 @@ type OwnProps = {
+   className?: string;
+   rank?: string;
+   isClickable?: boolean;
++  isBlue?: boolean;
+ };
+ 
+ const OWNER_PEER_COLOR = 2;
+ const ADMIN_PEER_COLOR = 3;
+ 
+ const RankBadge = ({
+-  chatId, className, userId, isAdmin, isOwner, rank, isClickable,
++  chatId, className, userId, isAdmin, isOwner, rank, isClickable, isBlue,
+ }: OwnProps) => {
+   const { openRankModal } = getActions();
+   const lang = useLang();
+-  const hasCustomColor = isOwner || isAdmin;
++  const isBlueTag = Boolean(isBlue && rank && !isOwner && !isAdmin);
++  const hasCustomColor = isOwner || isAdmin || isBlueTag;
+   const isPlain = !hasCustomColor;
+ 
+   const rankText = rank || (isOwner && lang('ChannelCreator')) || (isAdmin && lang('ChannelAdmin'));
+@@ -44,7 +47,9 @@ const RankBadge = ({
+   return (
+     <BadgeButton
+       className={buildClassName(
+-        hasCustomColor && getPeerColorClass(isOwner ? OWNER_PEER_COLOR : ADMIN_PEER_COLOR),
++        hasCustomColor && getPeerColorClass(
++          isOwner ? OWNER_PEER_COLOR : isBlueTag ? BLUE_TAG_PEER_COLOR : ADMIN_PEER_COLOR,
++        ),
+         isPlain && 'admin-title-plain',
+         className,
+       )}
+diff --git a/src/components/middle/message/Message.tsx b/src/components/middle/message/Message.tsx
+index 2a6dd76..71a3a7e 100644
+--- a/src/components/middle/message/Message.tsx
++++ b/src/components/middle/message/Message.tsx
+@@ -75,6 +75,7 @@ import {
+   isOwnMessage,
+   isReplyToMessage,
+   isSystemBot,
++  isTagPerksActive,
+ } from '../../../global/helpers';
+ import { getPeerFullTitle, getPeerTitle } from '../../../global/helpers/peers';
+ import { getEphemeralReplyInfo, getMessageReplyInfo, getStoryReplyInfo } from '../../../global/helpers/replies';
+@@ -1848,6 +1849,7 @@ const Message = ({
+         isAdmin={senderChatMember?.isAdmin}
+         isOwner={senderChatMember?.isOwner}
+         rank={senderChatMember?.rank || fromRank}
++        isBlue={message.isFromRankBlue || isTagPerksActive(senderChatMember?.tagPerks)}
+         className="admin-title-badge"
+         isClickable
+       />
+diff --git a/src/components/modals/rank/EditRankModal.module.scss b/src/components/modals/rank/EditRankModal.module.scss
+index 0a36662..38d9120 100644
+--- a/src/components/modals/rank/EditRankModal.module.scss
++++ b/src/components/modals/rank/EditRankModal.module.scss
+@@ -29,3 +29,76 @@
+   font-size: 0.875rem;
+   color: var(--color-text-secondary);
+ }
++
++.blueTag {
++  margin: 1rem -1rem 1rem;
++}
++
++.blueTagToggle,
++.blueTagOptions :global(.ListItem) {
++  margin: 0;
++}
++
++.blueTagTitle {
++  display: flex;
++  flex-grow: 1;
++  gap: 0.5rem;
++  align-items: center;
++
++  font-weight: var(--font-weight-medium);
++}
++
++.blueDot {
++  width: 0.625rem;
++  height: 0.625rem;
++  border-radius: 50%;
++  background-color: var(--color-peer-5, #3e88f7);
++}
++
++.blueTagOptions {
++  padding: 0 1rem;
++
++  .description {
++    margin: 0.25rem 0 0.75rem;
++  }
++}
++
++.optionLabel {
++  margin: 0.75rem 0 0.375rem;
++  font-size: 0.875rem;
++  color: var(--color-text-secondary);
++}
++
++.segments {
++  display: flex;
++  gap: 0.125rem;
++
++  padding: 0.125rem;
++  border-radius: 0.625rem;
++
++  background-color: var(--color-background-secondary);
++}
++
++.segment {
++  cursor: var(--custom-cursor, pointer);
++
++  flex: 1 1 0;
++
++  min-width: 0;
++  padding: 0.375rem 0.25rem;
++  border: none;
++  border-radius: 0.5rem;
++
++  font-size: 0.875rem;
++  color: var(--color-text);
++
++  background: none;
++
++  transition: background-color 150ms, box-shadow 150ms;
++}
++
++.segmentActive {
++  font-weight: var(--font-weight-medium);
++  background-color: var(--color-background);
++  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
++}
+diff --git a/src/components/modals/rank/EditRankModal.tsx b/src/components/modals/rank/EditRankModal.tsx
+index 1f1e915..3a596de 100644
+--- a/src/components/modals/rank/EditRankModal.tsx
++++ b/src/components/modals/rank/EditRankModal.tsx
+@@ -1,12 +1,19 @@
+ import { memo, useEffect, useState } from '../../../lib/teact/teact';
+ import { getActions, withGlobal } from '../../../global';
+ 
+-import type { ApiChat, ApiUser } from '../../../api/types';
++import type { ApiChat, ApiChatMemberTagPerks, ApiUser } from '../../../api/types';
+ import type { TabState } from '../../../global/types';
+ 
+-import { getUserFirstOrLastName } from '../../../global/helpers';
++import {
++  BLUE_TAG_DURATION_OPTIONS, BLUE_TAG_LIMIT_OPTIONS, BLUE_TAG_SLOW_MODE_OPTIONS,
++  getUserFirstOrLastName, isTagPerksActive,
++} from '../../../global/helpers';
+ import { getPeerTitle } from '../../../global/helpers/peers';
+-import { selectCanEditRank, selectChat, selectUser } from '../../../global/selectors';
++import {
++  selectCanEditRank, selectCanEditTagPerks, selectChat, selectChatFullInfo, selectUser,
++} from '../../../global/selectors';
++import buildClassName from '../../../util/buildClassName';
++import { getServerTime } from '../../../util/serverTime';
+ 
+ import useCurrentOrPrev from '../../../hooks/useCurrentOrPrev';
+ import useLang from '../../../hooks/useLang';
+@@ -17,8 +24,10 @@ import PreviewBlock from '../../common/PreviewBlock';
+ import RankBadge from '../../common/RankBadge';
+ import Button from '../../ui/Button';
+ import InputText from '../../ui/InputText';
++import ListItem from '../../ui/ListItem';
+ import Modal from '../../ui/Modal';
+ import Skeleton from '../../ui/placeholder/Skeleton';
++import Switcher from '../../ui/Switcher';
+ 
+ import styles from './EditRankModal.module.scss';
+ 
+@@ -30,27 +39,78 @@ type StateProps = {
+   user?: ApiUser;
+   chat?: ApiChat;
+   canEditRank?: boolean;
++  canEditTagPerks?: boolean;
++  tagPerks?: ApiChatMemberTagPerks;
+   isOwn?: boolean;
+ };
+ 
++type BlueTagDraft = {
++  isEnabled: boolean;
++  isFreeMessages: boolean;
++  slowModeSeconds: number;
++  duration: number; // 0 = forever
++  messagesLimit: number; // 0 = no limit
++};
++
++const DEFAULT_BLUE_TAG: BlueTagDraft = {
++  isEnabled: false,
++  isFreeMessages: true,
++  slowModeSeconds: 30,
++  duration: 7 * 86400,
++  messagesLimit: 50,
++};
++
++function buildDraft(perks?: ApiChatMemberTagPerks): BlueTagDraft {
++  if (!isTagPerksActive(perks)) return DEFAULT_BLUE_TAG;
++  const left = perks.untilDate ? perks.untilDate - getServerTime() : 0;
++  return {
++    isEnabled: true,
++    isFreeMessages: Boolean(perks.isFreeMessages),
++    slowModeSeconds: perks.slowModeSeconds || 0,
++    duration: !perks.untilDate ? 0 : (left > 86400 ? 7 * 86400 : 86400),
++    messagesLimit: perks.messagesLimit || 0,
++  };
++}
++
++function draftToPerks(draft: BlueTagDraft): ApiChatMemberTagPerks | undefined {
++  if (!draft.isEnabled) return undefined;
++  return {
++    isFreeMessages: draft.isFreeMessages || undefined,
++    slowModeSeconds: draft.slowModeSeconds || undefined,
++    untilDate: draft.duration ? getServerTime() + draft.duration : undefined,
++    messagesLimit: draft.messagesLimit || undefined,
++  };
++}
++
+ const MAX_RANK_LENGTH = 16;
+ const PREVIEW_TIME = '9:37';
+ 
+ const EditRankModal = ({
+-  modal, user, chat, canEditRank, isOwn,
++  modal, user, chat, canEditRank, canEditTagPerks, tagPerks, isOwn,
+ }: OwnProps & StateProps) => {
+-  const { closeEditRankModal, editChatParticipantRank } = getActions();
++  const {
++    closeEditRankModal, editChatParticipantRank, editChatMemberTagPerks, showNotification,
++  } = getActions();
+ 
+   const lang = useLang();
+ 
+   const isOpen = Boolean(modal);
+   const renderingModal = useCurrentOrPrev(modal);
+   const [rank, setRank] = useState('');
++  const [blueTag, setBlueTag] = useState<BlueTagDraft>(DEFAULT_BLUE_TAG);
++  const [initialBlueTag, setInitialBlueTag] = useState<BlueTagDraft>(DEFAULT_BLUE_TAG);
+ 
+   useEffect(() => {
+     if (!isOpen) return;
+     setRank((renderingModal?.rank || '').slice(0, MAX_RANK_LENGTH));
+-  }, [renderingModal?.chatId, renderingModal?.rank, renderingModal?.userId, isOpen]);
++    const draft = buildDraft(tagPerks);
++    setBlueTag(draft);
++    setInitialBlueTag(draft);
++  }, [renderingModal?.chatId, renderingModal?.rank, renderingModal?.userId, isOpen, tagPerks]);
++
++  const updateBlueTag = useLastCallback((update: Partial<BlueTagDraft>) => {
++    setBlueTag((current) => ({ ...current, ...update }));
++  });
+ 
+   const handleClose = useLastCallback(() => {
+     closeEditRankModal();
+@@ -65,18 +125,29 @@ const EditRankModal = ({
+   } = renderingModal || {};
+   const initialRank = (renderingModal?.rank || '').slice(0, MAX_RANK_LENGTH);
+   const shouldShowBadge = Boolean(rank || isAdmin || isOwner);
+-  const isSubmitDisabled = !canEditRank || rank === initialRank;
++  const isBlueTagChanged = JSON.stringify(blueTag) !== JSON.stringify(initialBlueTag);
++  const isBlueTagWithoutRank = blueTag.isEnabled && !rank;
++  const isSubmitDisabled = !canEditRank || (rank === initialRank && !isBlueTagChanged) || isBlueTagWithoutRank;
+ 
+   const handleSubmit = useLastCallback(() => {
+     if (isSubmitDisabled) return;
+ 
+     if (!chatId || !userId) return;
+ 
+-    editChatParticipantRank({
+-      chatId,
+-      userId,
+-      rank,
+-    });
++    if (rank !== initialRank) {
++      editChatParticipantRank({
++        chatId,
++        userId,
++        rank,
++      });
++    }
++
++    if (canEditTagPerks && isBlueTagChanged) {
++      editChatMemberTagPerks({ chatId, userId, perks: draftToPerks(blueTag) });
++      if (blueTag.isEnabled) {
++        showNotification({ message: lang('BlueTagSaved') });
++      }
++    }
+ 
+     handleClose();
+   });
+@@ -88,6 +159,82 @@ const EditRankModal = ({
+     handleSubmit();
+   });
+ 
++  function renderSegments<V extends number>(
++    options: V[], value: V, getLabel: (option: V) => string, onSelect: (option: V) => void,
++  ) {
++    return (
++      <div className={styles.segments} role="radiogroup">
++        {options.map((option) => (
++          <button
++            key={option}
++            type="button"
++            role="radio"
++            aria-checked={option === value}
++            className={buildClassName(styles.segment, option === value && styles.segmentActive)}
++            onClick={() => onSelect(option)}
++          >
++            {getLabel(option)}
++          </button>
++        ))}
++      </div>
++    );
++  }
++
++  function formatSlowMode(seconds: number) {
++    if (!seconds) return lang('BlueTagOff');
++    return seconds < 60
++      ? lang('BlueTagSecondsShort', { count: seconds })
++      : lang('BlueTagMinutesShort', { count: seconds / 60 });
++  }
++
++  function renderBlueTagSection() {
++    return (
++      <div className={styles.blueTag}>
++        <ListItem
++          className={styles.blueTagToggle}
++          narrow
++          ripple
++          onClick={() => updateBlueTag({ isEnabled: !blueTag.isEnabled })}
++        >
++          <span className={styles.blueTagTitle}>
++            <span className={styles.blueDot} />
++            {lang('BlueTagSection')}
++          </span>
++          <Switcher label={lang('BlueTagSection')} checked={blueTag.isEnabled} inactive />
++        </ListItem>
++        {blueTag.isEnabled && (
++          <div className={styles.blueTagOptions}>
++            <ListItem
++              narrow
++              ripple
++              onClick={() => updateBlueTag({ isFreeMessages: !blueTag.isFreeMessages })}
++            >
++              <span className={styles.blueTagTitle}>{lang('BlueTagFreeMessages')}</span>
++              <Switcher label={lang('BlueTagFreeMessages')} checked={blueTag.isFreeMessages} inactive />
++            </ListItem>
++            <p className={styles.description}>
++              {lang('BlueTagInfo', { user: user && getUserFirstOrLastName(lang, user) })}
++            </p>
++
++            <div className={styles.optionLabel}>{lang('BlueTagSlowMode')}</div>
++            {renderSegments(BLUE_TAG_SLOW_MODE_OPTIONS, blueTag.slowModeSeconds, formatSlowMode,
++              (slowModeSeconds) => updateBlueTag({ slowModeSeconds }))}
++
++            <div className={styles.optionLabel}>{lang('BlueTagDuration')}</div>
++            {renderSegments(BLUE_TAG_DURATION_OPTIONS, blueTag.duration, (duration) => (
++              !duration ? lang('BlueTagForever') : duration === 86400 ? lang('BlueTagDay1') : lang('BlueTagDays7')
++            ), (duration) => updateBlueTag({ duration }))}
++
++            <div className={styles.optionLabel}>{lang('BlueTagLimit')}</div>
++            {renderSegments(BLUE_TAG_LIMIT_OPTIONS, blueTag.messagesLimit, (limit) => (
++              limit ? String(limit) : lang('BlueTagNoLimit')
++            ), (messagesLimit) => updateBlueTag({ messagesLimit }))}
++          </div>
++        )}
++      </div>
++    );
++  }
++
+   if (!chatId || !userId) return undefined;
+ 
+   return (
+@@ -111,6 +258,7 @@ const EditRankModal = ({
+               className={styles.previewRankBadge}
+               isAdmin={isAdmin}
+               isOwner={isOwner}
++              isBlue={canEditTagPerks && blueTag.isEnabled}
+               rank={rank || undefined}
+             />
+           ) : undefined}
+@@ -137,6 +285,8 @@ const EditRankModal = ({
+         })}
+       </p>
+ 
++      {canEditTagPerks && renderBlueTagSection()}
++
+       <Button
+         disabled={isSubmitDisabled}
+         onClick={handleSubmit}
+@@ -162,7 +312,19 @@ function renderPreviewContent() {
+ 
+ export default memo(withGlobal<OwnProps>(
+   (global, { modal }): StateProps => {
++    const canEditTagPerks = modal && selectCanEditTagPerks(global, {
++      chatId: modal.chatId,
++      userId: modal.userId,
++      isAdmin: modal.isAdmin,
++      isOwner: modal.isOwner,
++    });
++    const member = canEditTagPerks
++      ? selectChatFullInfo(global, modal.chatId)?.members?.find(({ userId }) => userId === modal.userId)
++      : undefined;
++
+     return {
++      canEditTagPerks,
++      tagPerks: member?.tagPerks,
+       user: modal?.userId ? selectUser(global, modal.userId) : undefined,
+       chat: modal?.chatId ? selectChat(global, modal.chatId) : undefined,
+       canEditRank: modal && selectCanEditRank(global, {
+diff --git a/src/global/actions/api/chats.ts b/src/global/actions/api/chats.ts
+index 4338c95..9141b45 100644
+--- a/src/global/actions/api/chats.ts
++++ b/src/global/actions/api/chats.ts
+@@ -1,6 +1,6 @@
+ import type {
+   ApiChat, ApiChatFolder, ApiChatFullInfo, ApiChatlistExportedInvite,
+-  ApiChatMember, ApiDraft, ApiError, ApiMissingInvitedUser,
++  ApiChatMember, ApiChatMemberTagPerks, ApiDraft, ApiError, ApiMissingInvitedUser,
+   ApiTopic,
+   LinkContext,
+ } from '../../../api/types';
+@@ -34,6 +34,7 @@ import {
+   TOPICS_SLICE,
+   TOPICS_SLICE_SECOND_LOAD,
+ } from '../../../config';
++import { isBlueTagEmulationEnabled } from '../../../util/blueTagEmulation';
+ import { copyTextToClipboard } from '../../../util/clipboard';
+ import { formatShareText, processDeepLink } from '../../../util/deeplink';
+ import { isDeepLink } from '../../../util/deepLinkParser';
+@@ -91,6 +92,7 @@ import {
+   updateChatFullInfo,
+   updateChatLastMessageId,
+   updateChatListSecondaryInfo,
++  updateChatMemberTagPerks,
+   updateChatParticipantRank,
+   updateChats,
+   updateChatsLastMessageId,
+@@ -2386,6 +2388,41 @@ addActionHandler('editChatParticipantRank', async (global, actions, payload): Pr
+   setGlobal(global);
+ });
+ 
++addActionHandler('editChatMemberTagPerks', async (global, actions, payload): Promise<void> => {
++  if (selectIsCurrentUserFrozen(global)) {
++    return;
++  }
++
++  const { chatId, userId, perks } = payload;
++
++  const chat = selectChat(global, chatId);
++  const peer = selectPeer(global, userId);
++  if (!chat || !peer) {
++    return;
++  }
++
++  if (!isBlueTagEmulationEnabled()) {
++    const isUpdated = await callApi('editChatMemberTagPerks', { chat, peer, perks });
++    if (!isUpdated) {
++      return;
++    }
++  }
++
++  global = getGlobal();
++  global = updateChatMemberTagPerks(global, chat.id, userId, perks && { ...perks, messagesUsed: 0 });
++  setGlobal(global);
++});
++
++if (typeof window !== 'undefined') {
++  (window as any).blueTag = {
++    setMyPerks(chatId: string, perks?: ApiChatMemberTagPerks) {
++      let global = getGlobal();
++      global = updateChatMemberTagPerks(global, chatId, global.currentUserId!, perks);
++      setGlobal(global);
++    },
++  };
++}
++
+ addActionHandler('updateChat', async (global, actions, payload): Promise<void> => {
+   const {
+     chatId, title, about, photo, tabId = getCurrentTabId(),
+diff --git a/src/global/actions/api/messages.ts b/src/global/actions/api/messages.ts
+index 5f5d756..aa97336 100644
+--- a/src/global/actions/api/messages.ts
++++ b/src/global/actions/api/messages.ts
+@@ -73,6 +73,7 @@ import { getServerTime } from '../../../util/serverTime';
+ import { cancelVideoAttachmentProcessing, processVideoAttachment } from '../../../util/videoProcessingQueue';
+ import { callApi, cancelApiProgress } from '../../../api/gramjs';
+ import {
++  consumeTagPerksMessage,
+   getIsSavedDialog,
+   getUserFullName,
+   groupMessageIdsByThreadId,
+@@ -82,6 +83,7 @@ import {
+   isEphemeralSendSupported,
+   isMessageLocal,
+   isServiceNotificationMessage,
++  isTagPerksActive,
+   isUserBot,
+   isUserRightBanned,
+   resolveEphemeralCommand,
+@@ -2665,6 +2667,18 @@ async function sendMessage<T extends GlobalState>(global: T, params: SendMessage
+   await sendWithUploadProgress(global, Boolean(params.attachment), (progressCallback) => (
+     callApi('sendMessage', params, progressCallback)
+   ), params.localMessage);
++
++  if (params.chat) consumeBlueTagMessage(params.chat.id);
++}
++
++// Blue Tag: optimistic counter, reconciled by the next `channel` update from the server
++function consumeBlueTagMessage(chatId: string) {
++  let global = getGlobal();
++  const chat = selectChat(global, chatId);
++  if (!chat?.tagPerks || !isTagPerksActive(chat.tagPerks)) return;
++
++  global = updateChat(global, chatId, { tagPerks: consumeTagPerksMessage(chat.tagPerks) });
++  setGlobal(global);
+ }
+ 
+ export async function sendEphemeralMessages<T extends GlobalState>(
+diff --git a/src/global/helpers/blueTag.test.ts b/src/global/helpers/blueTag.test.ts
+new file mode 100644
+index 0000000..7efeae9
+--- /dev/null
++++ b/src/global/helpers/blueTag.test.ts
+@@ -0,0 +1,40 @@
++import { describe, expect, it } from 'vitest';
++
++import {
++  areTagPerksFree, consumeTagPerksMessage, getTagPerksMessagesLeft, isTagPerksActive,
++} from './blueTag';
++
++const NOW = 1_800_000_000;
++
++describe('Blue Tag perks', () => {
++  it('is active without limits', () => {
++    expect(isTagPerksActive({ isFreeMessages: true }, NOW)).toBe(true);
++    expect(isTagPerksActive(undefined, NOW)).toBe(false);
++  });
++
++  it('expires by date', () => {
++    expect(isTagPerksActive({ untilDate: NOW + 1 }, NOW)).toBe(true);
++    expect(isTagPerksActive({ untilDate: NOW }, NOW)).toBe(false);
++  });
++
++  it('expires by message limit', () => {
++    expect(isTagPerksActive({ messagesLimit: 50, messagesUsed: 49 }, NOW)).toBe(true);
++    expect(isTagPerksActive({ messagesLimit: 50, messagesUsed: 50 }, NOW)).toBe(false);
++  });
++
++  it('counts messages left', () => {
++    expect(getTagPerksMessagesLeft({ messagesLimit: 50, messagesUsed: 1 })).toBe(49);
++    expect(getTagPerksMessagesLeft({ isFreeMessages: true })).toBeUndefined();
++  });
++
++  it('drops perks after the last free message', () => {
++    expect(consumeTagPerksMessage({ isFreeMessages: true, messagesLimit: 2, messagesUsed: 0 }))
++      .toEqual({ isFreeMessages: true, messagesLimit: 2, messagesUsed: 1 });
++    expect(consumeTagPerksMessage({ isFreeMessages: true, messagesLimit: 1, messagesUsed: 0 })).toBeUndefined();
++  });
++
++  it('only free perks skip payment', () => {
++    expect(areTagPerksFree({ slowModeSeconds: 30 })).toBe(false);
++    expect(areTagPerksFree({ isFreeMessages: true })).toBe(true);
++  });
++});
+diff --git a/src/global/helpers/blueTag.ts b/src/global/helpers/blueTag.ts
+new file mode 100644
+index 0000000..900ccb1
+--- /dev/null
++++ b/src/global/helpers/blueTag.ts
+@@ -0,0 +1,29 @@
++import type { ApiChatMemberTagPerks } from '../../api/types';
++
++import { getServerTime } from '../../util/serverTime';
++
++export const BLUE_TAG_PEER_COLOR = 5;
++export const BLUE_TAG_SLOW_MODE_OPTIONS = [0, 10, 30, 60, 300];
++export const BLUE_TAG_DURATION_OPTIONS = [86400, 7 * 86400, 0];
++export const BLUE_TAG_LIMIT_OPTIONS = [10, 50, 0];
++
++export function isTagPerksActive(perks?: ApiChatMemberTagPerks, now = getServerTime()): perks is ApiChatMemberTagPerks {
++  if (!perks) return false;
++  if (perks.untilDate && perks.untilDate <= now) return false;
++  if (perks.messagesLimit && (perks.messagesUsed || 0) >= perks.messagesLimit) return false;
++  return true;
++}
++
++export function getTagPerksMessagesLeft(perks?: ApiChatMemberTagPerks) {
++  if (!perks?.messagesLimit) return undefined;
++  return Math.max(0, perks.messagesLimit - (perks.messagesUsed || 0));
++}
++
++export function areTagPerksFree(perks?: ApiChatMemberTagPerks) {
++  return isTagPerksActive(perks) && Boolean(perks.isFreeMessages);
++}
++
++export function consumeTagPerksMessage(perks: ApiChatMemberTagPerks): ApiChatMemberTagPerks | undefined {
++  const updated = { ...perks, messagesUsed: (perks.messagesUsed || 0) + 1 };
++  return isTagPerksActive(updated) ? updated : undefined;
++}
+diff --git a/src/global/helpers/index.ts b/src/global/helpers/index.ts
+index 9bf4237..8342544 100644
+--- a/src/global/helpers/index.ts
++++ b/src/global/helpers/index.ts
+@@ -14,3 +14,4 @@ export * from './richMessage';
+ export * from './tabs';
+ export * from './wallet';
+ export * from './buttons';
++export * from './blueTag';
+diff --git a/src/global/reducers/chats.ts b/src/global/reducers/chats.ts
+index 7ab3710..182b64e 100644
+--- a/src/global/reducers/chats.ts
++++ b/src/global/reducers/chats.ts
+@@ -1,7 +1,7 @@
+ import type { ChatListType } from '../../types';
+ import type { GlobalState } from '../types';
+ import {
+-  type ApiChat, type ApiChatFullInfo, type ApiChatMember,
++  type ApiChat, type ApiChatFullInfo, type ApiChatMember, type ApiChatMemberTagPerks,
+   MAIN_THREAD_ID,
+ } from '../../api/types';
+ 
+@@ -538,3 +538,25 @@ export function addSimilarBots<T extends GlobalState>(
+     },
+   };
+ }
++
++export function updateChatMemberTagPerks<T extends GlobalState>(
++  global: T, chatId: string, userId: string, perks?: ApiChatMemberTagPerks,
++): T {
++  if (userId === global.currentUserId) {
++    global = updateChat(global, chatId, { tagPerks: perks });
++  }
++
++  const fullInfo = selectChatFullInfo(global, chatId);
++  if (!fullInfo?.members) {
++    return global;
++  }
++
++  let isChanged = false;
++  const members = fullInfo.members.map((member) => {
++    if (member.userId !== userId) return member;
++    isChanged = true;
++    return { ...member, tagPerks: perks };
++  });
++
++  return isChanged ? updateChatFullInfo(global, chatId, { members }) : global;
++}
+diff --git a/src/global/selectors/chats.ts b/src/global/selectors/chats.ts
+index c2f3156..5b94d27 100644
+--- a/src/global/selectors/chats.ts
++++ b/src/global/selectors/chats.ts
+@@ -461,6 +461,23 @@ export function selectCanEditRank<T extends GlobalState>(global: T, {
+   return true;
+ }
+ 
++// Blue Tag: admins with `ban_users` can give perks to members of a supergroup
++export function selectCanEditTagPerks<T extends GlobalState>(global: T, {
++  chatId, userId, isAdmin, isOwner,
++}: {
++  chatId: string;
++  userId: string;
++  isAdmin?: boolean;
++  isOwner?: boolean;
++}) {
++  const chat = selectChat(global, chatId);
++  if (!chat || !isChatSuperGroup(chat)) return false;
++  if (isAdmin || isOwner || userId === global.currentUserId) return false;
++  if (!isChatAdmin(chat) || !getHasAdminRight(chat, 'banUsers')) return false;
++
++  return selectCanEditRank(global, { chatId, userId, isAdmin, isOwner });
++}
++
+ export function selectCanEditOwnRank<T extends GlobalState>(global: T, chatId: string) {
+   const chat = selectChat(global, chatId);
+   if (!chat || chat.isNotJoined || chat.isRestricted) return false;
+diff --git a/src/global/selectors/peers.ts b/src/global/selectors/peers.ts
+index b602cdc..6527bd3 100644
+--- a/src/global/selectors/peers.ts
++++ b/src/global/selectors/peers.ts
+@@ -4,7 +4,9 @@ import type { GlobalState, TabArgs } from '../types';
+ import { SERVICE_NOTIFICATIONS_USER_ID } from '../../config';
+ import { isUserId } from '../../util/entities/ids';
+ import { getCurrentTabId } from '../../util/establishMultitabRole';
+-import { getHasAdminRight, isChatAdmin, isChatChannel, isDeletedUser } from '../helpers';
++import {
++  areTagPerksFree, getHasAdminRight, isChatAdmin, isChatChannel, isDeletedUser,
++} from '../helpers';
+ import { selectChat, selectChatFullInfo, selectIsMonoforumAdmin } from './chats';
+ import { type ProfileCollectionKey } from './payments';
+ import { selectTabState } from './tabs';
+@@ -82,6 +84,7 @@ export function selectPeerPaidMessagesStars<T extends GlobalState>(
+   const chat = selectChat(global, peerId);
+   if (!chat) return undefined;
+   if (isChatAdmin(chat) || selectIsMonoforumAdmin(global, chat.id)) return undefined;
++  if (areTagPerksFree(chat.tagPerks)) return undefined;
+   return chat.paidMessagesStars;
+ }
+ 
+diff --git a/src/global/types/actions.ts b/src/global/types/actions.ts
+index 768ddae..a711a17 100644
+--- a/src/global/types/actions.ts
++++ b/src/global/types/actions.ts
+@@ -10,6 +10,7 @@ import type {
+   ApiChatBannedRights,
+   ApiChatFolder,
+   ApiChatlistInvite,
++  ApiChatMemberTagPerks,
+   ApiChatReactions,
+   ApiChatType,
+   ApiDisallowedGiftsSettings,
+@@ -219,6 +220,11 @@ export interface ActionPayloads {
+     userId: string;
+     rank: string;
+   };
++  editChatMemberTagPerks: {
++    chatId: string;
++    userId: string;
++    perks?: ApiChatMemberTagPerks;
++  } & WithTabId;
+ 
+   checkChatInvite: {
+     hash: string;
+diff --git a/src/lib/gramjs/tl/api.d.ts b/src/lib/gramjs/tl/api.d.ts
+index 620b41e..99b413d 100644
+--- a/src/lib/gramjs/tl/api.d.ts
++++ b/src/lib/gramjs/tl/api.d.ts
+@@ -165,7 +165,7 @@ namespace Api {
+   export type TypeLangPackString = LangPackString | LangPackStringPluralized | LangPackStringDeleted;
+   export type TypeLangPackDifference = LangPackDifference;
+   export type TypeLangPackLanguage = LangPackLanguage;
+-  export type TypeChannelAdminLogEventAction = ChannelAdminLogEventActionChangeTitle | ChannelAdminLogEventActionChangeAbout | ChannelAdminLogEventActionChangeUsername | ChannelAdminLogEventActionChangePhoto | ChannelAdminLogEventActionToggleInvites | ChannelAdminLogEventActionToggleSignatures | ChannelAdminLogEventActionUpdatePinned | ChannelAdminLogEventActionEditMessage | ChannelAdminLogEventActionDeleteMessage | ChannelAdminLogEventActionParticipantJoin | ChannelAdminLogEventActionParticipantLeave | ChannelAdminLogEventActionParticipantInvite | ChannelAdminLogEventActionParticipantToggleBan | ChannelAdminLogEventActionParticipantToggleAdmin | ChannelAdminLogEventActionChangeStickerSet | ChannelAdminLogEventActionTogglePreHistoryHidden | ChannelAdminLogEventActionDefaultBannedRights | ChannelAdminLogEventActionStopPoll | ChannelAdminLogEventActionChangeLinkedChat | ChannelAdminLogEventActionChangeLocation | ChannelAdminLogEventActionToggleSlowMode | ChannelAdminLogEventActionStartGroupCall | ChannelAdminLogEventActionDiscardGroupCall | ChannelAdminLogEventActionParticipantMute | ChannelAdminLogEventActionParticipantUnmute | ChannelAdminLogEventActionToggleGroupCallSetting | ChannelAdminLogEventActionParticipantJoinByInvite | ChannelAdminLogEventActionExportedInviteDelete | ChannelAdminLogEventActionExportedInviteRevoke | ChannelAdminLogEventActionExportedInviteEdit | ChannelAdminLogEventActionParticipantVolume | ChannelAdminLogEventActionChangeHistoryTTL | ChannelAdminLogEventActionParticipantJoinByRequest | ChannelAdminLogEventActionToggleNoForwards | ChannelAdminLogEventActionSendMessage | ChannelAdminLogEventActionChangeAvailableReactions | ChannelAdminLogEventActionChangeUsernames | ChannelAdminLogEventActionToggleForum | ChannelAdminLogEventActionCreateTopic | ChannelAdminLogEventActionEditTopic | ChannelAdminLogEventActionDeleteTopic | ChannelAdminLogEventActionPinTopic | ChannelAdminLogEventActionToggleAntiSpam | ChannelAdminLogEventActionChangePeerColor | ChannelAdminLogEventActionChangeProfilePeerColor | ChannelAdminLogEventActionChangeWallpaper | ChannelAdminLogEventActionChangeEmojiStatus | ChannelAdminLogEventActionChangeEmojiStickerSet | ChannelAdminLogEventActionToggleSignatureProfiles | ChannelAdminLogEventActionParticipantSubExtend | ChannelAdminLogEventActionToggleAutotranslation | ChannelAdminLogEventActionParticipantEditRank;
++  export type TypeChannelAdminLogEventAction = ChannelAdminLogEventActionChangeTitle | ChannelAdminLogEventActionChangeAbout | ChannelAdminLogEventActionChangeUsername | ChannelAdminLogEventActionChangePhoto | ChannelAdminLogEventActionToggleInvites | ChannelAdminLogEventActionToggleSignatures | ChannelAdminLogEventActionUpdatePinned | ChannelAdminLogEventActionEditMessage | ChannelAdminLogEventActionDeleteMessage | ChannelAdminLogEventActionParticipantJoin | ChannelAdminLogEventActionParticipantLeave | ChannelAdminLogEventActionParticipantInvite | ChannelAdminLogEventActionParticipantToggleBan | ChannelAdminLogEventActionParticipantToggleAdmin | ChannelAdminLogEventActionChangeStickerSet | ChannelAdminLogEventActionTogglePreHistoryHidden | ChannelAdminLogEventActionDefaultBannedRights | ChannelAdminLogEventActionStopPoll | ChannelAdminLogEventActionChangeLinkedChat | ChannelAdminLogEventActionChangeLocation | ChannelAdminLogEventActionToggleSlowMode | ChannelAdminLogEventActionStartGroupCall | ChannelAdminLogEventActionDiscardGroupCall | ChannelAdminLogEventActionParticipantMute | ChannelAdminLogEventActionParticipantUnmute | ChannelAdminLogEventActionToggleGroupCallSetting | ChannelAdminLogEventActionParticipantJoinByInvite | ChannelAdminLogEventActionExportedInviteDelete | ChannelAdminLogEventActionExportedInviteRevoke | ChannelAdminLogEventActionExportedInviteEdit | ChannelAdminLogEventActionParticipantVolume | ChannelAdminLogEventActionChangeHistoryTTL | ChannelAdminLogEventActionParticipantJoinByRequest | ChannelAdminLogEventActionToggleNoForwards | ChannelAdminLogEventActionSendMessage | ChannelAdminLogEventActionChangeAvailableReactions | ChannelAdminLogEventActionChangeUsernames | ChannelAdminLogEventActionToggleForum | ChannelAdminLogEventActionCreateTopic | ChannelAdminLogEventActionEditTopic | ChannelAdminLogEventActionDeleteTopic | ChannelAdminLogEventActionPinTopic | ChannelAdminLogEventActionToggleAntiSpam | ChannelAdminLogEventActionChangePeerColor | ChannelAdminLogEventActionChangeProfilePeerColor | ChannelAdminLogEventActionChangeWallpaper | ChannelAdminLogEventActionChangeEmojiStatus | ChannelAdminLogEventActionChangeEmojiStickerSet | ChannelAdminLogEventActionToggleSignatureProfiles | ChannelAdminLogEventActionParticipantSubExtend | ChannelAdminLogEventActionToggleAutotranslation | ChannelAdminLogEventActionParticipantEditRank | ChannelAdminLogEventActionParticipantEditTagPerks;
+   export type TypeChannelAdminLogEvent = ChannelAdminLogEvent;
+   export type TypeChannelAdminLogEventsFilter = ChannelAdminLogEventsFilter;
+   export type TypePopularContact = PopularContact;
+@@ -211,6 +211,7 @@ namespace Api {
+   export type TypeStatsURL = StatsURL;
+   export type TypeChatAdminRights = ChatAdminRights;
+   export type TypeChatBannedRights = ChatBannedRights;
++  export type TypeChatMemberTagPerks = ChatMemberTagPerks;
+   export type TypeInputWallPaper = InputWallPaper | InputWallPaperSlug | InputWallPaperNoFile;
+   export type TypeCodeSettings = CodeSettings;
+   export type TypeWallPaperSettings = WallPaperSettings;
+@@ -1962,6 +1963,7 @@ namespace Api {
+     linkedMonoforumId?: long;
+     linkedCommunityId?: long;
+     pinnedMsgId?: int;
++    tagPerks?: Api.TypeChatMemberTagPerks;
+   }> {
+     // flags: Api.Type;
+     creator?: true;
+@@ -2018,7 +2020,8 @@ namespace Api {
+     linkedMonoforumId?: long;
+     linkedCommunityId?: long;
+     pinnedMsgId?: int;
+-    CONSTRUCTOR_ID: 2060538432;
++    tagPerks?: Api.TypeChatMemberTagPerks;
++    CONSTRUCTOR_ID: 1694893692;
+     SUBCLASS_OF_ID: 3316604308;
+     className: 'Channel';
+ 
+@@ -2463,6 +2466,7 @@ namespace Api {
+     fromId?: Api.TypePeer;
+     fromBoostsApplied?: int;
+     fromRank?: string;
++    fromRankBlue?: true;
+     peerId: Api.TypePeer;
+     savedPeerId?: Api.TypePeer;
+     fwdFrom?: Api.TypeMessageFwdHeader;
+@@ -2515,6 +2519,7 @@ namespace Api {
+     fromId?: Api.TypePeer;
+     fromBoostsApplied?: int;
+     fromRank?: string;
++    fromRankBlue?: true;
+     peerId: Api.TypePeer;
+     savedPeerId?: Api.TypePeer;
+     fwdFrom?: Api.TypeMessageFwdHeader;
+@@ -2545,7 +2550,7 @@ namespace Api {
+     scheduleRepeatPeriod?: int;
+     summaryFromLanguage?: string;
+     richMessage?: Api.TypeRichMessage;
+-    CONSTRUCTOR_ID: 1979759059;
++    CONSTRUCTOR_ID: 3105310492;
+     SUBCLASS_OF_ID: 2030045667;
+     className: 'Message';
+ 
+@@ -9653,13 +9658,15 @@ namespace Api {
+     date: int;
+     subscriptionUntilDate?: int;
+     rank?: string;
++    tagPerks?: Api.TypeChatMemberTagPerks;
+   }> {
+     // flags: Api.Type;
+     userId: long;
+     date: int;
+     subscriptionUntilDate?: int;
+     rank?: string;
+-    CONSTRUCTOR_ID: 466961494;
++    tagPerks?: Api.TypeChatMemberTagPerks;
++    CONSTRUCTOR_ID: 3088202696;
+     SUBCLASS_OF_ID: 3653762072;
+     className: 'ChannelParticipant';
+ 
+@@ -9673,6 +9680,7 @@ namespace Api {
+     date: int;
+     subscriptionUntilDate?: int;
+     rank?: string;
++    tagPerks?: Api.TypeChatMemberTagPerks;
+   }> {
+     // flags: Api.Type;
+     viaRequest?: true;
+@@ -9681,7 +9689,8 @@ namespace Api {
+     date: int;
+     subscriptionUntilDate?: int;
+     rank?: string;
+-    CONSTRUCTOR_ID: 2840037914;
++    tagPerks?: Api.TypeChatMemberTagPerks;
++    CONSTRUCTOR_ID: 1355471342;
+     SUBCLASS_OF_ID: 3653762072;
+     className: 'ChannelParticipantSelf';
+ 
+@@ -12917,6 +12926,22 @@ namespace Api {
+ 
+     static fromReader(reader: Reader): ChannelAdminLogEventActionParticipantEditRank;
+   }
++  export class ChannelAdminLogEventActionParticipantEditTagPerks extends VirtualClass<{
++    // flags: Api.Type;
++    userId: long;
++    prevPerks?: Api.TypeChatMemberTagPerks;
++    newPerks?: Api.TypeChatMemberTagPerks;
++  }> {
++    // flags: Api.Type;
++    userId: long;
++    prevPerks?: Api.TypeChatMemberTagPerks;
++    newPerks?: Api.TypeChatMemberTagPerks;
++    CONSTRUCTOR_ID: 1093200493;
++    SUBCLASS_OF_ID: 2998503411;
++    className: 'ChannelAdminLogEventActionParticipantEditTagPerks';
++
++    static fromReader(reader: Reader): ChannelAdminLogEventActionParticipantEditTagPerks;
++  }
+   export class ChannelAdminLogEvent extends VirtualClass<{
+     id: long;
+     date: int;
+@@ -14254,6 +14279,26 @@ namespace Api {
+ 
+     static fromReader(reader: Reader): ChatBannedRights;
+   }
++  export class ChatMemberTagPerks extends VirtualClass<{
++    // flags: Api.Type;
++    freeMessages?: true;
++    slowmodeSeconds?: int;
++    untilDate?: int;
++    messagesLimit?: int;
++    messagesUsed?: int;
++  } | void> {
++    // flags: Api.Type;
++    freeMessages?: true;
++    slowmodeSeconds?: int;
++    untilDate?: int;
++    messagesLimit?: int;
++    messagesUsed?: int;
++    CONSTRUCTOR_ID: 2025114800;
++    SUBCLASS_OF_ID: 3463066168;
++    className: 'ChatMemberTagPerks';
++
++    static fromReader(reader: Reader): ChatMemberTagPerks;
++  }
+   export class InputWallPaper extends VirtualClass<{
+     id: long;
+     accessHash: long;
+@@ -31373,6 +31418,17 @@ namespace Api {
+       channel: Api.TypeInputChannel;
+       participant: Api.TypeInputPeer;
+     }
++    export class EditMemberTagPerks extends Request<{
++      // flags: Api.Type;
++      channel: Api.TypeInputChannel;
++      participant: Api.TypeInputPeer;
++      perks?: Api.TypeChatMemberTagPerks;
++    }, Api.TypeUpdates> {
++      // flags: Api.Type;
++      channel: Api.TypeInputChannel;
++      participant: Api.TypeInputPeer;
++      perks?: Api.TypeChatMemberTagPerks;
++    }
+     export class GetChannels extends Request<{
+       id: Api.TypeInputChannel[];
+     }, messages.TypeChats> {
+@@ -34427,7 +34483,7 @@ namespace Api {
+     | photos.UpdateProfilePhoto | photos.UploadProfilePhoto | photos.DeletePhotos | photos.GetUserPhotos | photos.UploadContactProfilePhoto
+     | upload.SaveFilePart | upload.GetFile | upload.SaveBigFilePart | upload.GetWebFile | upload.GetCdnFile | upload.ReuploadCdnFile | upload.GetCdnFileHashes | upload.GetFileHashes
+     | help.GetConfig | help.GetNearestDc | help.GetAppUpdate | help.GetInviteText | help.GetSupport | help.SetBotUpdatesStatus | help.GetCdnConfig | help.GetRecentMeUrls | help.GetTermsOfServiceUpdate | help.AcceptTermsOfService | help.GetDeepLinkInfo | help.GetAppConfig | help.SaveAppLog | help.GetPassportConfig | help.GetSupportName | help.GetUserInfo | help.EditUserInfo | help.GetPromoData | help.HidePromoData | help.DismissSuggestion | help.GetCountriesList | help.GetPremiumPromo | help.GetPeerColors | help.GetPeerProfileColors | help.GetTimezonesList
+-    | channels.ReadHistory | channels.DeleteMessages | channels.ReportSpam | channels.GetMessages | channels.GetParticipants | channels.GetParticipant | channels.GetChannels | channels.GetFullChannel | channels.CreateChannel | channels.EditAdmin | channels.EditTitle | channels.EditPhoto | channels.CheckUsername | channels.UpdateUsername | channels.JoinChannel | channels.LeaveChannel | channels.InviteToChannel | channels.DeleteChannel | channels.ExportMessageLink | channels.ToggleSignatures | channels.GetAdminedPublicChannels | channels.EditBanned | channels.GetAdminLog | channels.SetStickers | channels.ReadMessageContents | channels.DeleteHistory | channels.TogglePreHistoryHidden | channels.GetLeftChannels | channels.GetGroupsForDiscussion | channels.SetDiscussionGroup | channels.EditLocation | channels.ToggleSlowMode | channels.GetInactiveChannels | channels.ConvertToGigagroup | channels.GetSendAs | channels.DeleteParticipantHistory | channels.ToggleJoinToSend | channels.ToggleJoinRequest | channels.ReorderUsernames | channels.ToggleUsername | channels.DeactivateAllUsernames | channels.ToggleForum | channels.ToggleAntiSpam | channels.ReportAntiSpamFalsePositive | channels.ToggleParticipantsHidden | channels.UpdateColor | channels.ToggleViewForumAsMessages | channels.GetChannelRecommendations | channels.UpdateEmojiStatus | channels.SetBoostsToUnblockRestrictions | channels.SetEmojiStickers | channels.RestrictSponsoredMessages | channels.SearchPosts | channels.UpdatePaidMessagesPrice | channels.ToggleAutotranslation | channels.GetMessageAuthor | channels.CheckSearchPostsFlood | channels.SetMainProfileTab
++    | channels.ReadHistory | channels.DeleteMessages | channels.ReportSpam | channels.GetMessages | channels.GetParticipants | channels.GetParticipant | channels.EditMemberTagPerks | channels.GetChannels | channels.GetFullChannel | channels.CreateChannel | channels.EditAdmin | channels.EditTitle | channels.EditPhoto | channels.CheckUsername | channels.UpdateUsername | channels.JoinChannel | channels.LeaveChannel | channels.InviteToChannel | channels.DeleteChannel | channels.ExportMessageLink | channels.ToggleSignatures | channels.GetAdminedPublicChannels | channels.EditBanned | channels.GetAdminLog | channels.SetStickers | channels.ReadMessageContents | channels.DeleteHistory | channels.TogglePreHistoryHidden | channels.GetLeftChannels | channels.GetGroupsForDiscussion | channels.SetDiscussionGroup | channels.EditLocation | channels.ToggleSlowMode | channels.GetInactiveChannels | channels.ConvertToGigagroup | channels.GetSendAs | channels.DeleteParticipantHistory | channels.ToggleJoinToSend | channels.ToggleJoinRequest | channels.ReorderUsernames | channels.ToggleUsername | channels.DeactivateAllUsernames | channels.ToggleForum | channels.ToggleAntiSpam | channels.ReportAntiSpamFalsePositive | channels.ToggleParticipantsHidden | channels.UpdateColor | channels.ToggleViewForumAsMessages | channels.GetChannelRecommendations | channels.UpdateEmojiStatus | channels.SetBoostsToUnblockRestrictions | channels.SetEmojiStickers | channels.RestrictSponsoredMessages | channels.SearchPosts | channels.UpdatePaidMessagesPrice | channels.ToggleAutotranslation | channels.GetMessageAuthor | channels.CheckSearchPostsFlood | channels.SetMainProfileTab
+     | bots.SendCustomRequest | bots.AnswerWebhookJSONQuery | bots.SetBotCommands | bots.ResetBotCommands | bots.GetBotCommands | bots.SetBotMenuButton | bots.GetBotMenuButton | bots.SetBotBroadcastDefaultAdminRights | bots.SetBotGroupDefaultAdminRights | bots.SetBotInfo | bots.GetBotInfo | bots.ReorderUsernames | bots.ToggleUsername | bots.CanSendMessage | bots.AllowSendMessage | bots.InvokeWebViewCustomMethod | bots.GetPopularAppBots | bots.AddPreviewMedia | bots.EditPreviewMedia | bots.DeletePreviewMedia | bots.ReorderPreviewMedias | bots.GetPreviewInfo | bots.GetPreviewMedias | bots.UpdateUserEmojiStatus | bots.ToggleUserEmojiStatusPermission | bots.CheckDownloadFileParams | bots.GetAdminedBots | bots.UpdateStarRefProgram | bots.SetCustomVerification | bots.GetBotRecommendations | bots.CheckUsername | bots.CreateBot | bots.ExportBotToken | bots.RequestWebViewButton | bots.GetRequestedWebViewButton | bots.GetAccessSettings | bots.EditAccessSettings | bots.SetJoinChatResults | bots.AddUsername | bots.RemoveUsername
+     | payments.GetPaymentForm | payments.GetPaymentReceipt | payments.ValidateRequestedInfo | payments.SendPaymentForm | payments.GetSavedInfo | payments.ClearSavedInfo | payments.GetBankCardData | payments.ExportInvoice | payments.AssignAppStoreTransaction | payments.AssignPlayMarketTransaction | payments.GetPremiumGiftCodeOptions | payments.CheckGiftCode | payments.ApplyGiftCode | payments.GetGiveawayInfo | payments.LaunchPrepaidGiveaway | payments.GetStarsTopupOptions | payments.GetStarsStatus | payments.GetStarsTransactions | payments.SendStarsForm | payments.RefundStarsCharge | payments.GetStarsRevenueStats | payments.GetStarsRevenueWithdrawalUrl | payments.GetStarsRevenueAdsAccountUrl | payments.GetStarsTransactionsByID | payments.GetStarsGiftOptions | payments.GetStarsSubscriptions | payments.ChangeStarsSubscription | payments.FulfillStarsSubscription | payments.GetStarsGiveawayOptions | payments.GetStarGifts | payments.SaveStarGift | payments.ConvertStarGift | payments.BotCancelStarsSubscription | payments.GetConnectedStarRefBots | payments.GetConnectedStarRefBot | payments.GetSuggestedStarRefBots | payments.ConnectStarRefBot | payments.EditConnectedStarRefBot | payments.GetStarGiftUpgradePreview | payments.UpgradeStarGift | payments.TransferStarGift | payments.GetUniqueStarGift | payments.GetSavedStarGifts | payments.GetSavedStarGift | payments.GetStarGiftWithdrawalUrl | payments.ToggleChatStarGiftNotifications | payments.ToggleStarGiftsPinnedToTop | payments.CanPurchaseStore | payments.GetResaleStarGifts | payments.UpdateStarGiftPrice | payments.CreateStarGiftCollection | payments.UpdateStarGiftCollection | payments.ReorderStarGiftCollections | payments.DeleteStarGiftCollection | payments.GetStarGiftCollections | payments.GetUniqueStarGiftValueInfo | payments.CheckCanSendGift | payments.GetStarGiftAuctionState | payments.GetStarGiftAuctionAcquiredGifts | payments.GetStarGiftActiveAuctions | payments.ResolveStarGiftOffer | payments.SendStarGiftOffer | payments.GetStarGiftUpgradeAttributes | payments.GetCraftStarGifts | payments.CraftStarGift | payments.GetCurrencyRates | payments.GetOnrampProviders | payments.GetOnrampBaseCurrencies | payments.GetOnrampAvailability | payments.GetOnrampLimits | payments.GetOnrampQuote | payments.CreateOnrampSession | payments.WithdrawStarGift | payments.DepositStarGift | payments.DisplayStarGift | payments.DeleteStarGift
+     | stickers.CreateStickerSet | stickers.RemoveStickerFromSet | stickers.ChangeStickerPosition | stickers.AddStickerToSet | stickers.SetStickerSetThumb | stickers.CheckShortName | stickers.SuggestShortName | stickers.ChangeSticker | stickers.RenameStickerSet | stickers.DeleteStickerSet | stickers.ReplaceSticker
+diff --git a/src/lib/gramjs/tl/apiTl.ts b/src/lib/gramjs/tl/apiTl.ts
+index 3082925..677c55b 100644
+--- a/src/lib/gramjs/tl/apiTl.ts
++++ b/src/lib/gramjs/tl/apiTl.ts
+@@ -84,7 +84,7 @@ userStatusLastMonth#65899777 flags:# by_me:flags.0?true = UserStatus;
+ chatEmpty#29562865 id:long = Chat;
+ chat#41cbf256 flags:# creator:flags.0?true left:flags.2?true deactivated:flags.5?true call_active:flags.23?true call_not_empty:flags.24?true noforwards:flags.25?true id:long title:string photo:ChatPhoto participants_count:int date:int version:int migrated_to:flags.6?InputChannel admin_rights:flags.14?ChatAdminRights default_banned_rights:flags.18?ChatBannedRights = Chat;
+ chatForbidden#6592a1a7 id:long title:string = Chat;
+-channel#7ad15240 flags:# creator:flags.0?true left:flags.2?true broadcast:flags.5?true verified:flags.7?true megagroup:flags.8?true restricted:flags.9?true signatures:flags.11?true min:flags.12?true scam:flags.19?true has_link:flags.20?true has_geo:flags.21?true slowmode_enabled:flags.22?true call_active:flags.23?true call_not_empty:flags.24?true fake:flags.25?true gigagroup:flags.26?true noforwards:flags.27?true join_to_send:flags.28?true join_request:flags.29?true forum:flags.30?true flags2:# stories_hidden:flags2.1?true stories_hidden_min:flags2.2?true stories_unavailable:flags2.3?true signature_profiles:flags2.12?true autotranslation:flags2.15?true broadcast_messages_allowed:flags2.16?true monoforum:flags2.17?true forum_tabs:flags2.19?true in_news:flags2.21?true forum_sidebar:flags2.23?true id:long access_hash:flags.13?long title:string username:flags.6?string photo:ChatPhoto date:int restriction_reason:flags.9?Vector<RestrictionReason> admin_rights:flags.14?ChatAdminRights banned_rights:flags.15?ChatBannedRights default_banned_rights:flags.18?ChatBannedRights participants_count:flags.17?int usernames:flags2.0?Vector<Username> stories_max_id:flags2.4?RecentStory color:flags2.7?PeerColor profile_color:flags2.8?PeerColor emoji_status:flags2.9?EmojiStatus level:flags2.10?int subscription_until_date:flags2.11?int bot_verification_icon:flags2.13?long send_paid_messages_stars:flags2.14?long linked_monoforum_id:flags2.18?long linked_community_id:flags2.20?long pinned_msg_id:flags2.22?int = Chat;
++channel#6506067c flags:# creator:flags.0?true left:flags.2?true broadcast:flags.5?true verified:flags.7?true megagroup:flags.8?true restricted:flags.9?true signatures:flags.11?true min:flags.12?true scam:flags.19?true has_link:flags.20?true has_geo:flags.21?true slowmode_enabled:flags.22?true call_active:flags.23?true call_not_empty:flags.24?true fake:flags.25?true gigagroup:flags.26?true noforwards:flags.27?true join_to_send:flags.28?true join_request:flags.29?true forum:flags.30?true flags2:# stories_hidden:flags2.1?true stories_hidden_min:flags2.2?true stories_unavailable:flags2.3?true signature_profiles:flags2.12?true autotranslation:flags2.15?true broadcast_messages_allowed:flags2.16?true monoforum:flags2.17?true forum_tabs:flags2.19?true in_news:flags2.21?true forum_sidebar:flags2.23?true id:long access_hash:flags.13?long title:string username:flags.6?string photo:ChatPhoto date:int restriction_reason:flags.9?Vector<RestrictionReason> admin_rights:flags.14?ChatAdminRights banned_rights:flags.15?ChatBannedRights default_banned_rights:flags.18?ChatBannedRights participants_count:flags.17?int usernames:flags2.0?Vector<Username> stories_max_id:flags2.4?RecentStory color:flags2.7?PeerColor profile_color:flags2.8?PeerColor emoji_status:flags2.9?EmojiStatus level:flags2.10?int subscription_until_date:flags2.11?int bot_verification_icon:flags2.13?long send_paid_messages_stars:flags2.14?long linked_monoforum_id:flags2.18?long linked_community_id:flags2.20?long pinned_msg_id:flags2.22?int tag_perks:flags2.24?ChatMemberTagPerks = Chat;
+ channelForbidden#17d493d5 flags:# broadcast:flags.5?true megagroup:flags.8?true monoforum:flags.10?true id:long access_hash:long title:string until_date:flags.16?int = Chat;
+ communityForbidden#fd3cdab8 flags:# id:long access_hash:flags.13?long title:string = Chat;
+ community#65efe954 flags:# creator:flags.0?true left:flags.2?true min:flags.12?true flags2:# collapsed_in_dialogs:flags2.20?true id:long access_hash:flags.13?long title:string photo:ChatPhoto date:int admin_rights:flags.14?ChatAdminRights default_banned_rights:flags.18?ChatBannedRights = Chat;
+@@ -99,7 +99,7 @@ chatParticipants#3cbc93f8 chat_id:long participants:Vector<ChatParticipant> vers
+ chatPhotoEmpty#37c1011c = ChatPhoto;
+ chatPhoto#1c6e1c11 flags:# has_video:flags.0?true photo_id:long stripped_thumb:flags.1?bytes dc_id:int = ChatPhoto;
+ messageEmpty#90a6ca84 flags:# id:int peer_id:flags.0?Peer = Message;
+-message#7600b9d3 flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true silent:flags.13?true post:flags.14?true from_scheduled:flags.18?true legacy:flags.19?true edit_hide:flags.21?true pinned:flags.24?true noforwards:flags.26?true invert_media:flags.27?true flags2:# offline:flags2.1?true video_processing_pending:flags2.4?true paid_suggested_post_stars:flags2.8?true paid_suggested_post_ton:flags2.9?true id:int from_id:flags.8?Peer from_boosts_applied:flags.29?int from_rank:flags2.12?string peer_id:Peer saved_peer_id:flags.28?Peer fwd_from:flags.2?MessageFwdHeader via_bot_id:flags.11?long via_business_bot_id:flags2.0?long guestchat_via_from:flags2.19?Peer reply_to:flags.3?MessageReplyHeader date:int message:string media:flags.9?MessageMedia reply_markup:flags.6?ReplyMarkup entities:flags.7?Vector<MessageEntity> views:flags.10?int forwards:flags.10?int replies:flags.23?MessageReplies edit_date:flags.15?int post_author:flags.16?string grouped_id:flags.17?long reactions:flags.20?MessageReactions restriction_reason:flags.22?Vector<RestrictionReason> ttl_period:flags.25?int quick_reply_shortcut_id:flags.30?int effect:flags2.2?long factcheck:flags2.3?FactCheck report_delivery_until_date:flags2.5?int paid_message_stars:flags2.6?long suggested_post:flags2.7?SuggestedPost schedule_repeat_period:flags2.10?int summary_from_language:flags2.11?string rich_message:flags2.13?RichMessage = Message;
++message#b917471c flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true silent:flags.13?true post:flags.14?true from_scheduled:flags.18?true legacy:flags.19?true edit_hide:flags.21?true pinned:flags.24?true noforwards:flags.26?true invert_media:flags.27?true flags2:# offline:flags2.1?true video_processing_pending:flags2.4?true paid_suggested_post_stars:flags2.8?true paid_suggested_post_ton:flags2.9?true id:int from_id:flags.8?Peer from_boosts_applied:flags.29?int from_rank:flags2.12?string from_rank_blue:flags2.20?true peer_id:Peer saved_peer_id:flags.28?Peer fwd_from:flags.2?MessageFwdHeader via_bot_id:flags.11?long via_business_bot_id:flags2.0?long guestchat_via_from:flags2.19?Peer reply_to:flags.3?MessageReplyHeader date:int message:string media:flags.9?MessageMedia reply_markup:flags.6?ReplyMarkup entities:flags.7?Vector<MessageEntity> views:flags.10?int forwards:flags.10?int replies:flags.23?MessageReplies edit_date:flags.15?int post_author:flags.16?string grouped_id:flags.17?long reactions:flags.20?MessageReactions restriction_reason:flags.22?Vector<RestrictionReason> ttl_period:flags.25?int quick_reply_shortcut_id:flags.30?int effect:flags2.2?long factcheck:flags2.3?FactCheck report_delivery_until_date:flags2.5?int paid_message_stars:flags2.6?long suggested_post:flags2.7?SuggestedPost schedule_repeat_period:flags2.10?int summary_from_language:flags2.11?string rich_message:flags2.13?RichMessage = Message;
+ messageService#7a800e0a flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true reactions_are_possible:flags.9?true silent:flags.13?true post:flags.14?true legacy:flags.19?true id:int from_id:flags.8?Peer peer_id:Peer saved_peer_id:flags.28?Peer reply_to:flags.3?MessageReplyHeader date:int action:MessageAction reactions:flags.20?MessageReactions ttl_period:flags.25?int = Message;
+ messageMediaEmpty#3ded6320 = MessageMedia;
+ messageMediaPhoto#e216eb63 flags:# spoiler:flags.3?true live_photo:flags.4?true photo:flags.0?Photo ttl_seconds:flags.2?int video:flags.4?Document = MessageMedia;
+@@ -665,8 +665,8 @@ updates.channelDifferenceTooLong#a4bcc6fe flags:# final:flags.0?true timeout:fla
+ updates.channelDifference#2064674e flags:# final:flags.0?true pts:int timeout:flags.1?int new_messages:Vector<Message> other_updates:Vector<Update> chats:Vector<Chat> users:Vector<User> = updates.ChannelDifference;
+ channelMessagesFilterEmpty#94d42ee7 = ChannelMessagesFilter;
+ channelMessagesFilter#cd77d957 flags:# exclude_new_messages:flags.1?true ranges:Vector<MessageRange> = ChannelMessagesFilter;
+-channelParticipant#1bd54456 flags:# user_id:long date:int subscription_until_date:flags.0?int rank:flags.2?string = ChannelParticipant;
+-channelParticipantSelf#a9478a1a flags:# via_request:flags.0?true user_id:long inviter_id:long date:int subscription_until_date:flags.1?int rank:flags.2?string = ChannelParticipant;
++channelParticipant#b8123bc8 flags:# user_id:long date:int subscription_until_date:flags.0?int rank:flags.2?string tag_perks:flags.3?ChatMemberTagPerks = ChannelParticipant;
++channelParticipantSelf#50cad9ee flags:# via_request:flags.0?true user_id:long inviter_id:long date:int subscription_until_date:flags.1?int rank:flags.2?string tag_perks:flags.3?ChatMemberTagPerks = ChannelParticipant;
+ channelParticipantCreator#2fe601d3 flags:# user_id:long admin_rights:ChatAdminRights rank:flags.0?string = ChannelParticipant;
+ channelParticipantAdmin#34c3bb53 flags:# can_edit:flags.0?true self:flags.1?true user_id:long inviter_id:flags.1?long promoted_by:long date:int admin_rights:ChatAdminRights rank:flags.2?string = ChannelParticipant;
+ channelParticipantBanned#d5f0ad91 flags:# left:flags.0?true peer:Peer kicked_by:long date:int banned_rights:ChatBannedRights rank:flags.2?string = ChannelParticipant;
+@@ -952,6 +952,7 @@ channelAdminLogEventActionToggleSignatureProfiles#60a79c79 new_value:Bool = Chan
+ channelAdminLogEventActionParticipantSubExtend#64642db3 prev_participant:ChannelParticipant new_participant:ChannelParticipant = ChannelAdminLogEventAction;
+ channelAdminLogEventActionToggleAutotranslation#c517f77e new_value:Bool = ChannelAdminLogEventAction;
+ channelAdminLogEventActionParticipantEditRank#5806b4ec user_id:long prev_rank:string new_rank:string = ChannelAdminLogEventAction;
++channelAdminLogEventActionParticipantEditTagPerks#4128ea6d flags:# user_id:long prev_perks:flags.0?ChatMemberTagPerks new_perks:flags.1?ChatMemberTagPerks = ChannelAdminLogEventAction;
+ channelAdminLogEvent#1fad68cd id:long date:int user_id:long action:ChannelAdminLogEventAction = ChannelAdminLogEvent;
+ channels.adminLogResults#ed8af74d events:Vector<ChannelAdminLogEvent> chats:Vector<Chat> users:Vector<User> = channels.AdminLogResults;
+ channelAdminLogEventsFilter#ea107ae4 flags:# join:flags.0?true leave:flags.1?true invite:flags.2?true ban:flags.3?true unban:flags.4?true kick:flags.5?true unkick:flags.6?true promote:flags.7?true demote:flags.8?true info:flags.9?true settings:flags.10?true pinned:flags.11?true edit:flags.12?true delete:flags.13?true group_call:flags.14?true invites:flags.15?true send:flags.16?true forums:flags.17?true sub_extend:flags.18?true edit_rank:flags.19?true = ChannelAdminLogEventsFilter;
+@@ -1063,6 +1064,7 @@ chatOnlines#f041e250 onlines:int = ChatOnlines;
+ statsURL#47a971e0 url:string = StatsURL;
+ chatAdminRights#5fb224d5 flags:# change_info:flags.0?true post_messages:flags.1?true edit_messages:flags.2?true delete_messages:flags.3?true ban_users:flags.4?true invite_users:flags.5?true pin_messages:flags.7?true add_admins:flags.9?true anonymous:flags.10?true manage_call:flags.11?true other:flags.12?true manage_topics:flags.13?true post_stories:flags.14?true edit_stories:flags.15?true delete_stories:flags.16?true manage_direct_messages:flags.17?true manage_ranks:flags.18?true manage_linked_peers:flags.19?true manage_welcome_messages:flags.20?true = ChatAdminRights;
+ chatBannedRights#9f120418 flags:# view_messages:flags.0?true send_messages:flags.1?true send_media:flags.2?true send_stickers:flags.3?true send_gifs:flags.4?true send_games:flags.5?true send_inline:flags.6?true embed_links:flags.7?true send_polls:flags.8?true change_info:flags.10?true invite_users:flags.15?true pin_messages:flags.17?true manage_topics:flags.18?true send_photos:flags.19?true send_videos:flags.20?true send_roundvideos:flags.21?true send_audios:flags.22?true send_voices:flags.23?true send_docs:flags.24?true send_plain:flags.25?true edit_rank:flags.26?true send_reactions:flags.27?true manage_linked_peers:flags.28?true until_date:int = ChatBannedRights;
++chatMemberTagPerks#78b4ccb0 flags:# free_messages:flags.0?true slowmode_seconds:flags.1?int until_date:flags.2?int messages_limit:flags.3?int messages_used:flags.4?int = ChatMemberTagPerks;
+ inputWallPaper#e630b979 id:long access_hash:long = InputWallPaper;
+ inputWallPaperSlug#72091c80 slug:string = InputWallPaper;
+ inputWallPaperNoFile#967a462e id:long = InputWallPaper;
+@@ -2057,6 +2059,7 @@ channels.reportSpam#f44a8315 channel:InputChannel participant:InputPeer id:Vecto
+ channels.getMessages#ad8c9a23 channel:InputChannel id:Vector<InputMessage> = messages.Messages;
+ channels.getParticipants#77ced9d0 channel:InputChannel filter:ChannelParticipantsFilter offset:int limit:int hash:long = channels.ChannelParticipants;
+ channels.getParticipant#a0ab6cc6 channel:InputChannel participant:InputPeer = channels.ChannelParticipant;
++channels.editMemberTagPerks#72de3d23 flags:# channel:InputChannel participant:InputPeer perks:flags.0?ChatMemberTagPerks = Updates;
+ channels.getChannels#a7f6bbb id:Vector<InputChannel> = messages.Chats;
+ channels.getFullChannel#8736a09 channel:InputChannel = messages.ChatFull;
+ channels.createChannel#91006707 flags:# broadcast:flags.0?true megagroup:flags.1?true for_import:flags.3?true forum:flags.5?true title:string about:string geo_point:flags.2?InputGeoPoint address:flags.2?string ttl_period:flags.4?int = Updates;
+diff --git a/src/lib/gramjs/tl/blueTag.test.ts b/src/lib/gramjs/tl/blueTag.test.ts
+new file mode 100644
+index 0000000..7d893c9
+--- /dev/null
++++ b/src/lib/gramjs/tl/blueTag.test.ts
+@@ -0,0 +1,46 @@
++import { describe, expect, it } from 'vitest';
++
++import { Api } from '..';
++import { BinaryReader } from '../extensions';
++
++function roundTrip<T>(object: { getBytes(): Uint8Array }): T {
++  return new BinaryReader(object.getBytes()).tgReadObject() as T;
++}
++
++describe('Blue Tag TL', () => {
++  it('uses CRC32 constructor ids from SPEC.md', () => {
++    expect(Api.ChatMemberTagPerks.CONSTRUCTOR_ID).toBe(0x78b4ccb0);
++    expect(Api.ChannelParticipant.CONSTRUCTOR_ID).toBe(0xb8123bc8);
++    expect(Api.channels.EditMemberTagPerks.CONSTRUCTOR_ID).toBe(0x72de3d23);
++  });
++
++  it('round-trips channelParticipant.tag_perks', () => {
++    const participant = new Api.ChannelParticipant({
++      userId: BigInt(42) as any,
++      date: 1_700_000_000,
++      rank: 'bug hunter',
++      tagPerks: new Api.ChatMemberTagPerks({
++        freeMessages: true,
++        slowmodeSeconds: 30,
++        untilDate: 1_800_000_000,
++        messagesLimit: 50,
++        messagesUsed: 1,
++      }),
++    });
++
++    const parsed = roundTrip<Api.ChannelParticipant>(participant);
++    expect(parsed.rank).toBe('bug hunter');
++    expect(parsed.tagPerks?.freeMessages).toBe(true);
++    expect(parsed.tagPerks?.slowmodeSeconds).toBe(30);
++    expect(parsed.tagPerks?.messagesLimit).toBe(50);
++    expect(parsed.tagPerks?.messagesUsed).toBe(1);
++  });
++
++  it('keeps perks optional', () => {
++    const parsed = roundTrip<Api.ChannelParticipant>(new Api.ChannelParticipant({
++      userId: BigInt(42) as any,
++      date: 1,
++    }));
++    expect(parsed.tagPerks).toBeUndefined();
++  });
++});
+diff --git a/src/lib/gramjs/tl/static/api.json b/src/lib/gramjs/tl/static/api.json
+index 65872a8..bf08619 100644
+--- a/src/lib/gramjs/tl/static/api.json
++++ b/src/lib/gramjs/tl/static/api.json
+@@ -314,6 +314,7 @@
+     "channels.getMessages",
+     "channels.getParticipants",
+     "channels.getParticipant",
++    "channels.editMemberTagPerks",
+     "channels.getParticipant",
+     "channels.getChannels",
+     "channels.getFullChannel",
+diff --git a/src/lib/gramjs/tl/static/api.tl b/src/lib/gramjs/tl/static/api.tl
+index ec5d0d9..53640d1 100644
+--- a/src/lib/gramjs/tl/static/api.tl
++++ b/src/lib/gramjs/tl/static/api.tl
+@@ -103,7 +103,7 @@ userStatusLastMonth#65899777 flags:# by_me:flags.0?true = UserStatus;
+ chatEmpty#29562865 id:long = Chat;
+ chat#41cbf256 flags:# creator:flags.0?true left:flags.2?true deactivated:flags.5?true call_active:flags.23?true call_not_empty:flags.24?true noforwards:flags.25?true id:long title:string photo:ChatPhoto participants_count:int date:int version:int migrated_to:flags.6?InputChannel admin_rights:flags.14?ChatAdminRights default_banned_rights:flags.18?ChatBannedRights = Chat;
+ chatForbidden#6592a1a7 id:long title:string = Chat;
+-channel#7ad15240 flags:# creator:flags.0?true left:flags.2?true broadcast:flags.5?true verified:flags.7?true megagroup:flags.8?true restricted:flags.9?true signatures:flags.11?true min:flags.12?true scam:flags.19?true has_link:flags.20?true has_geo:flags.21?true slowmode_enabled:flags.22?true call_active:flags.23?true call_not_empty:flags.24?true fake:flags.25?true gigagroup:flags.26?true noforwards:flags.27?true join_to_send:flags.28?true join_request:flags.29?true forum:flags.30?true flags2:# stories_hidden:flags2.1?true stories_hidden_min:flags2.2?true stories_unavailable:flags2.3?true signature_profiles:flags2.12?true autotranslation:flags2.15?true broadcast_messages_allowed:flags2.16?true monoforum:flags2.17?true forum_tabs:flags2.19?true in_news:flags2.21?true forum_sidebar:flags2.23?true id:long access_hash:flags.13?long title:string username:flags.6?string photo:ChatPhoto date:int restriction_reason:flags.9?Vector<RestrictionReason> admin_rights:flags.14?ChatAdminRights banned_rights:flags.15?ChatBannedRights default_banned_rights:flags.18?ChatBannedRights participants_count:flags.17?int usernames:flags2.0?Vector<Username> stories_max_id:flags2.4?RecentStory color:flags2.7?PeerColor profile_color:flags2.8?PeerColor emoji_status:flags2.9?EmojiStatus level:flags2.10?int subscription_until_date:flags2.11?int bot_verification_icon:flags2.13?long send_paid_messages_stars:flags2.14?long linked_monoforum_id:flags2.18?long linked_community_id:flags2.20?long pinned_msg_id:flags2.22?int = Chat;
++channel#6506067c flags:# creator:flags.0?true left:flags.2?true broadcast:flags.5?true verified:flags.7?true megagroup:flags.8?true restricted:flags.9?true signatures:flags.11?true min:flags.12?true scam:flags.19?true has_link:flags.20?true has_geo:flags.21?true slowmode_enabled:flags.22?true call_active:flags.23?true call_not_empty:flags.24?true fake:flags.25?true gigagroup:flags.26?true noforwards:flags.27?true join_to_send:flags.28?true join_request:flags.29?true forum:flags.30?true flags2:# stories_hidden:flags2.1?true stories_hidden_min:flags2.2?true stories_unavailable:flags2.3?true signature_profiles:flags2.12?true autotranslation:flags2.15?true broadcast_messages_allowed:flags2.16?true monoforum:flags2.17?true forum_tabs:flags2.19?true in_news:flags2.21?true forum_sidebar:flags2.23?true id:long access_hash:flags.13?long title:string username:flags.6?string photo:ChatPhoto date:int restriction_reason:flags.9?Vector<RestrictionReason> admin_rights:flags.14?ChatAdminRights banned_rights:flags.15?ChatBannedRights default_banned_rights:flags.18?ChatBannedRights participants_count:flags.17?int usernames:flags2.0?Vector<Username> stories_max_id:flags2.4?RecentStory color:flags2.7?PeerColor profile_color:flags2.8?PeerColor emoji_status:flags2.9?EmojiStatus level:flags2.10?int subscription_until_date:flags2.11?int bot_verification_icon:flags2.13?long send_paid_messages_stars:flags2.14?long linked_monoforum_id:flags2.18?long linked_community_id:flags2.20?long pinned_msg_id:flags2.22?int tag_perks:flags2.24?ChatMemberTagPerks = Chat;
+ channelForbidden#17d493d5 flags:# broadcast:flags.5?true megagroup:flags.8?true monoforum:flags.10?true id:long access_hash:long title:string until_date:flags.16?int = Chat;
+ communityForbidden#fd3cdab8 flags:# id:long access_hash:flags.13?long title:string = Chat;
+ community#65efe954 flags:# creator:flags.0?true left:flags.2?true min:flags.12?true flags2:# collapsed_in_dialogs:flags2.20?true id:long access_hash:flags.13?long title:string photo:ChatPhoto date:int admin_rights:flags.14?ChatAdminRights default_banned_rights:flags.18?ChatBannedRights = Chat;
+@@ -123,7 +123,7 @@ chatPhotoEmpty#37c1011c = ChatPhoto;
+ chatPhoto#1c6e1c11 flags:# has_video:flags.0?true photo_id:long stripped_thumb:flags.1?bytes dc_id:int = ChatPhoto;
+ 
+ messageEmpty#90a6ca84 flags:# id:int peer_id:flags.0?Peer = Message;
+-message#7600b9d3 flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true silent:flags.13?true post:flags.14?true from_scheduled:flags.18?true legacy:flags.19?true edit_hide:flags.21?true pinned:flags.24?true noforwards:flags.26?true invert_media:flags.27?true flags2:# offline:flags2.1?true video_processing_pending:flags2.4?true paid_suggested_post_stars:flags2.8?true paid_suggested_post_ton:flags2.9?true id:int from_id:flags.8?Peer from_boosts_applied:flags.29?int from_rank:flags2.12?string peer_id:Peer saved_peer_id:flags.28?Peer fwd_from:flags.2?MessageFwdHeader via_bot_id:flags.11?long via_business_bot_id:flags2.0?long guestchat_via_from:flags2.19?Peer reply_to:flags.3?MessageReplyHeader date:int message:string media:flags.9?MessageMedia reply_markup:flags.6?ReplyMarkup entities:flags.7?Vector<MessageEntity> views:flags.10?int forwards:flags.10?int replies:flags.23?MessageReplies edit_date:flags.15?int post_author:flags.16?string grouped_id:flags.17?long reactions:flags.20?MessageReactions restriction_reason:flags.22?Vector<RestrictionReason> ttl_period:flags.25?int quick_reply_shortcut_id:flags.30?int effect:flags2.2?long factcheck:flags2.3?FactCheck report_delivery_until_date:flags2.5?int paid_message_stars:flags2.6?long suggested_post:flags2.7?SuggestedPost schedule_repeat_period:flags2.10?int summary_from_language:flags2.11?string rich_message:flags2.13?RichMessage = Message;
++message#b917471c flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true silent:flags.13?true post:flags.14?true from_scheduled:flags.18?true legacy:flags.19?true edit_hide:flags.21?true pinned:flags.24?true noforwards:flags.26?true invert_media:flags.27?true flags2:# offline:flags2.1?true video_processing_pending:flags2.4?true paid_suggested_post_stars:flags2.8?true paid_suggested_post_ton:flags2.9?true id:int from_id:flags.8?Peer from_boosts_applied:flags.29?int from_rank:flags2.12?string from_rank_blue:flags2.20?true peer_id:Peer saved_peer_id:flags.28?Peer fwd_from:flags.2?MessageFwdHeader via_bot_id:flags.11?long via_business_bot_id:flags2.0?long guestchat_via_from:flags2.19?Peer reply_to:flags.3?MessageReplyHeader date:int message:string media:flags.9?MessageMedia reply_markup:flags.6?ReplyMarkup entities:flags.7?Vector<MessageEntity> views:flags.10?int forwards:flags.10?int replies:flags.23?MessageReplies edit_date:flags.15?int post_author:flags.16?string grouped_id:flags.17?long reactions:flags.20?MessageReactions restriction_reason:flags.22?Vector<RestrictionReason> ttl_period:flags.25?int quick_reply_shortcut_id:flags.30?int effect:flags2.2?long factcheck:flags2.3?FactCheck report_delivery_until_date:flags2.5?int paid_message_stars:flags2.6?long suggested_post:flags2.7?SuggestedPost schedule_repeat_period:flags2.10?int summary_from_language:flags2.11?string rich_message:flags2.13?RichMessage = Message;
+ messageService#7a800e0a flags:# out:flags.1?true mentioned:flags.4?true media_unread:flags.5?true reactions_are_possible:flags.9?true silent:flags.13?true post:flags.14?true legacy:flags.19?true id:int from_id:flags.8?Peer peer_id:Peer saved_peer_id:flags.28?Peer reply_to:flags.3?MessageReplyHeader date:int action:MessageAction reactions:flags.20?MessageReactions ttl_period:flags.25?int = Message;
+ 
+ messageMediaEmpty#3ded6320 = MessageMedia;
+@@ -778,8 +778,8 @@ updates.channelDifference#2064674e flags:# final:flags.0?true pts:int timeout:fl
+ channelMessagesFilterEmpty#94d42ee7 = ChannelMessagesFilter;
+ channelMessagesFilter#cd77d957 flags:# exclude_new_messages:flags.1?true ranges:Vector<MessageRange> = ChannelMessagesFilter;
+ 
+-channelParticipant#1bd54456 flags:# user_id:long date:int subscription_until_date:flags.0?int rank:flags.2?string = ChannelParticipant;
+-channelParticipantSelf#a9478a1a flags:# via_request:flags.0?true user_id:long inviter_id:long date:int subscription_until_date:flags.1?int rank:flags.2?string = ChannelParticipant;
++channelParticipant#b8123bc8 flags:# user_id:long date:int subscription_until_date:flags.0?int rank:flags.2?string tag_perks:flags.3?ChatMemberTagPerks = ChannelParticipant;
++channelParticipantSelf#50cad9ee flags:# via_request:flags.0?true user_id:long inviter_id:long date:int subscription_until_date:flags.1?int rank:flags.2?string tag_perks:flags.3?ChatMemberTagPerks = ChannelParticipant;
+ channelParticipantCreator#2fe601d3 flags:# user_id:long admin_rights:ChatAdminRights rank:flags.0?string = ChannelParticipant;
+ channelParticipantAdmin#34c3bb53 flags:# can_edit:flags.0?true self:flags.1?true user_id:long inviter_id:flags.1?long promoted_by:long date:int admin_rights:ChatAdminRights rank:flags.2?string = ChannelParticipant;
+ channelParticipantBanned#d5f0ad91 flags:# left:flags.0?true peer:Peer kicked_by:long date:int banned_rights:ChatBannedRights rank:flags.2?string = ChannelParticipant;
+@@ -1135,6 +1135,7 @@ channelAdminLogEventActionToggleSignatureProfiles#60a79c79 new_value:Bool = Chan
+ channelAdminLogEventActionParticipantSubExtend#64642db3 prev_participant:ChannelParticipant new_participant:ChannelParticipant = ChannelAdminLogEventAction;
+ channelAdminLogEventActionToggleAutotranslation#c517f77e new_value:Bool = ChannelAdminLogEventAction;
+ channelAdminLogEventActionParticipantEditRank#5806b4ec user_id:long prev_rank:string new_rank:string = ChannelAdminLogEventAction;
++channelAdminLogEventActionParticipantEditTagPerks#4128ea6d flags:# user_id:long prev_perks:flags.0?ChatMemberTagPerks new_perks:flags.1?ChatMemberTagPerks = ChannelAdminLogEventAction;
+ 
+ channelAdminLogEvent#1fad68cd id:long date:int user_id:long action:ChannelAdminLogEventAction = ChannelAdminLogEvent;
+ 
+@@ -1304,6 +1305,7 @@ statsURL#47a971e0 url:string = StatsURL;
+ chatAdminRights#5fb224d5 flags:# change_info:flags.0?true post_messages:flags.1?true edit_messages:flags.2?true delete_messages:flags.3?true ban_users:flags.4?true invite_users:flags.5?true pin_messages:flags.7?true add_admins:flags.9?true anonymous:flags.10?true manage_call:flags.11?true other:flags.12?true manage_topics:flags.13?true post_stories:flags.14?true edit_stories:flags.15?true delete_stories:flags.16?true manage_direct_messages:flags.17?true manage_ranks:flags.18?true manage_linked_peers:flags.19?true manage_welcome_messages:flags.20?true = ChatAdminRights;
+ 
+ chatBannedRights#9f120418 flags:# view_messages:flags.0?true send_messages:flags.1?true send_media:flags.2?true send_stickers:flags.3?true send_gifs:flags.4?true send_games:flags.5?true send_inline:flags.6?true embed_links:flags.7?true send_polls:flags.8?true change_info:flags.10?true invite_users:flags.15?true pin_messages:flags.17?true manage_topics:flags.18?true send_photos:flags.19?true send_videos:flags.20?true send_roundvideos:flags.21?true send_audios:flags.22?true send_voices:flags.23?true send_docs:flags.24?true send_plain:flags.25?true edit_rank:flags.26?true send_reactions:flags.27?true manage_linked_peers:flags.28?true until_date:int = ChatBannedRights;
++chatMemberTagPerks#78b4ccb0 flags:# free_messages:flags.0?true slowmode_seconds:flags.1?int until_date:flags.2?int messages_limit:flags.3?int messages_used:flags.4?int = ChatMemberTagPerks;
+ 
+ inputWallPaper#e630b979 id:long access_hash:long = InputWallPaper;
+ inputWallPaperSlug#72091c80 slug:string = InputWallPaper;
+@@ -2934,6 +2936,7 @@ channels.reportSpam#f44a8315 channel:InputChannel participant:InputPeer id:Vecto
+ channels.getMessages#ad8c9a23 channel:InputChannel id:Vector<InputMessage> = messages.Messages;
+ channels.getParticipants#77ced9d0 channel:InputChannel filter:ChannelParticipantsFilter offset:int limit:int hash:long = channels.ChannelParticipants;
+ channels.getParticipant#a0ab6cc6 channel:InputChannel participant:InputPeer = channels.ChannelParticipant;
++channels.editMemberTagPerks#72de3d23 flags:# channel:InputChannel participant:InputPeer perks:flags.0?ChatMemberTagPerks = Updates;
+ channels.getChannels#a7f6bbb id:Vector<InputChannel> = messages.Chats;
+ channels.getFullChannel#8736a09 channel:InputChannel = messages.ChatFull;
+ channels.createChannel#91006707 flags:# broadcast:flags.0?true megagroup:flags.1?true for_import:flags.3?true forum:flags.5?true title:string about:string geo_point:flags.2?InputGeoPoint address:flags.2?string ttl_period:flags.4?int = Updates;
+diff --git a/src/types/language.d.ts b/src/types/language.d.ts
+index a3b692e..dbc0c92 100644
+--- a/src/types/language.d.ts
++++ b/src/types/language.d.ts
+@@ -3578,6 +3578,18 @@ export interface LangPair {
+   'SettingsKeywordsLogOut': undefined;
+   'SettingsKeywordsShortcuts': undefined;
+   'SettingsSearchEmpty': undefined;
++  'BlueTagSection': undefined;
++  'BlueTagFreeMessages': undefined;
++  'BlueTagSlowMode': undefined;
++  'BlueTagDuration': undefined;
++  'BlueTagLimit': undefined;
++  'BlueTagOff': undefined;
++  'BlueTagDay1': undefined;
++  'BlueTagDays7': undefined;
++  'BlueTagForever': undefined;
++  'BlueTagNoLimit': undefined;
++  'BlueTagPlaceholder': undefined;
++  'BlueTagSaved': undefined;
+ }
+ 
+ export interface LangPairWithVariables<V = LangVariable> {
+@@ -5906,6 +5918,18 @@ export interface LangPairWithVariables<V = LangVariable> {
+   'VoiceChatJoinConfirmChannel': {
+     'chat': V;
+   };
++  'BlueTagInfo': {
++    'user': V;
++  };
++  'BlueTagSecondsShort': {
++    'count': V;
++  };
++  'BlueTagMinutesShort': {
++    'count': V;
++  };
++  'BlueTagPlaceholderLeft': {
++    'count': V;
++  };
+ }
+ 
+ export interface LangPairPlural {
+@@ -6739,7 +6763,8 @@ export interface LangKeyGroups {
+       | 'UserInfoSetCustomPhoto'
+       | 'UserInfoSetCustomPhotoSuccessPhotoText'
+       | 'UserInfoSuggestPhoto'
+-      | 'WebAppAddToAttachmentAllowMessages';
++      | 'WebAppAddToAttachmentAllowMessages'
++      | 'BlueTagInfo';
+     variables: 'user';
+   };
+   'users': {
+@@ -7146,7 +7171,10 @@ export interface LangKeyGroups {
+       | 'BoostGiftStarsPerUser'
+       | 'ConnectedAccountsLimitSubtitle'
+       | 'GiveawayStarsPrepaidTitle'
+-      | 'SimilarChannelsLimitSubtitle';
++      | 'SimilarChannelsLimitSubtitle'
++      | 'BlueTagSecondsShort'
++      | 'BlueTagMinutesShort'
++      | 'BlueTagPlaceholderLeft';
+     variables: 'count';
+   };
+   'duration,time': {
+diff --git a/src/util/blueTagEmulation.ts b/src/util/blueTagEmulation.ts
+new file mode 100644
+index 0000000..b87e335
+--- /dev/null
++++ b/src/util/blueTagEmulation.ts
+@@ -0,0 +1,13 @@
++// Blue Tag is a proposed API (see SPEC.md). Until the server supports it, the client can emulate it locally:
++//   localStorage.setItem('tt-blue-tag-emulation', '1')
++// Admin side: Edit Member Tag saves the perks locally instead of calling channels.editMemberTagPerks.
++// Member side: window.blueTag.setMyPerks(chatId, { isFreeMessages: true, slowModeSeconds: 5, messagesLimit: 50 }).
++const STORAGE_KEY = 'tt-blue-tag-emulation';
++
++export function isBlueTagEmulationEnabled() {
++  try {
++    return localStorage.getItem(STORAGE_KEY) === '1';
++  } catch {
++    return false;
++  }
++}
