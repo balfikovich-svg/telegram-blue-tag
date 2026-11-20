@@ -1,0 +1,489 @@
+diff --git a/Telegram-Mac/en.lproj/Localizable.strings b/Telegram-Mac/en.lproj/Localizable.strings
+index 4a52fc6125e22bee841f3d03e7dfeb2b503d97c6..9f56118d9ea98293e0004e361a8233f8a6e24b58 100644
+GIT binary patch
+delta 953
+zcmZ`&OKTHh6g_!N5;JLDGt)^MV!i|<h&9+%7a|l9L1+b=?4*mBOiCclgd|mj6fN9^
+z;!07jh?{N{1Q&uJxD)&VzE<L*g<5p!4-n*=CNZzBKDggG_nv$2x!>-Ue?2bWB^SBL
+zLtawIM}7*>2?~-*A)28uMJP%!ijzh<88l1g+eGoB5kwXjQO6c66j8zk@+k2B@0iKU
+zsh~F_<D&PI#d%ENc|Dw%<K|Z-#NBOQkS`b2#LP%W-q+M*tc(&G5V(aFYUsdX*HcwX
+zH&McE)X=~N1PbV&gcjP!L*OcGe*HpCDKccSea3CXCe(6f&6DKkue@=7<o3sn=^{U@
+zn`gOsQV&E%q#@6{?-hf)xnMNCf*Lj*ZO7zz6VUkF16MdTmIDP?D8ohr6|{NhiQnLb
+z&t@n+Ar`Ant6Q@F9`ep9EMs$eN#t?Kna?7!5V!z=EEXY9aiUXY4mfQr4Y8I6toA4`
+z&|f_7&U=#l>6u55jOpf`syj1RKW;p1=fY`a1s1AoZ~M&5I|#_G1nM$~&S*us%3S#L
+zkzEe&tNOLEdeVX@;U+9phFa)PT{tF@c4-fxMy$z^pPIqnRVAMO&pNXA*w7?0$zKk%
+zdF6&Y1Acg*8D^i<zlbYnpbDG+Tz47#V^5p)J78G+cTY=lb5++<17kx-ELzUnf&~i;
+V?CSb7K78qoa&gTQ59E6~{sFvb%i90|
+
+delta 57
+zcmaDcCHYE6azhJa3sVbo3rh=Y3tJ0&3r7oQ3s(zw3r`Dg3ttO=i$IHDi%^Sji%5%T
+Mi&%^J7KxA}07d8$^8f$<
+
+diff --git a/packages/ChatHistoryModel/Sources/ChatHistoryModel/ChatEntryTypes.swift b/packages/ChatHistoryModel/Sources/ChatHistoryModel/ChatEntryTypes.swift
+index d61504c..c722145 100644
+--- a/packages/ChatHistoryModel/Sources/ChatHistoryModel/ChatEntryTypes.swift
++++ b/packages/ChatHistoryModel/Sources/ChatHistoryModel/ChatEntryTypes.swift
+@@ -13,6 +13,7 @@ public enum AdminBadgeType: Equatable {
+     case none
+     case admin
+     case owner
++    case blue
+ }
+ 
+ public enum ChatItemType : Equatable {
+diff --git a/packages/ChatHistoryModel/Sources/ChatHistoryModel/ChatHistoryEntry.swift b/packages/ChatHistoryModel/Sources/ChatHistoryModel/ChatHistoryEntry.swift
+index 26f67b6..02fd3ae 100644
+--- a/packages/ChatHistoryModel/Sources/ChatHistoryModel/ChatHistoryEntry.swift
++++ b/packages/ChatHistoryModel/Sources/ChatHistoryModel/ChatHistoryEntry.swift
+@@ -1087,7 +1087,9 @@ public func messageEntries(_ messagesEntries: [MessageHistoryEntry], location: C
+         }
+         if rank == nil, let rankAttr = message.attributes.first(where: { $0 is ParticipantRankMessageAttribute }) as? ParticipantRankMessageAttribute, !rankAttr.rank.isEmpty {
+             rank = rankAttr.rank
+-
++            if rankAttr.isBlue {
++                rankType = .blue
++            }
+         }
+ 
+         var itemType:ChatItemType = .Full(rank: rank, rankType: rankType, header: .normal)
+diff --git a/packages/ChatUI/Sources/ChatUI/ChatController.swift b/packages/ChatUI/Sources/ChatUI/ChatController.swift
+index 2d33977..9fdf4f2 100644
+--- a/packages/ChatUI/Sources/ChatUI/ChatController.swift
++++ b/packages/ChatUI/Sources/ChatUI/ChatController.swift
+@@ -9062,7 +9062,7 @@ open class ChatController<Context: AccountContextProtocol>: TelegramGenericViewC
+                         if let peer = present.peer as? TelegramChannel {
+                             switch peer.info {
+                             case let .group(info):
+-                                if info.flags.contains(.slowModeEnabled), peer.adminRights == nil && !peer.flags.contains(.isCreator), !canBypassChatRestrictions(cachedData) {
++                                if peer.activeTagPerks(timestamp: context.timestamp).map({ $0.slowmodeSeconds > 0 }) ?? info.flags.contains(.slowModeEnabled), peer.adminRights == nil && !peer.flags.contains(.isCreator), !canBypassChatRestrictions(cachedData) {
+                                     present = present.updateSlowMode({ value in
+                                         var value = value ?? SlowMode()
+                                         value = value.withUpdatedValidUntil(cachedData.slowModeValidUntilTimestamp)
+@@ -9528,7 +9528,7 @@ open class ChatController<Context: AccountContextProtocol>: TelegramGenericViewC
+                             if let peer = mainPeer as? TelegramChannel {
+                                 switch peer.info {
+                                 case let .group(info):
+-                                    if info.flags.contains(.slowModeEnabled), peer.adminRights == nil && !peer.flags.contains(.isCreator), !canBypassChatRestrictions(cachedData) {
++                                    if peer.activeTagPerks(timestamp: context.timestamp).map({ $0.slowmodeSeconds > 0 }) ?? info.flags.contains(.slowModeEnabled), peer.adminRights == nil && !peer.flags.contains(.isCreator), !canBypassChatRestrictions(cachedData) {
+                                         present = present.updateSlowMode({ value in
+                                             var value = value ?? SlowMode()
+                                             value = value.withUpdatedValidUntil(cachedData.slowModeValidUntilTimestamp)
+diff --git a/packages/ChatUI/Sources/ChatUI/ChatInputView.swift b/packages/ChatUI/Sources/ChatUI/ChatInputView.swift
+index 8654ddb..625412e 100644
+--- a/packages/ChatUI/Sources/ChatUI/ChatInputView.swift
++++ b/packages/ChatUI/Sources/ChatUI/ChatInputView.swift
+@@ -1171,6 +1171,14 @@ public class ChatInputView: View, Notifable {
+         if let amount = chatInteraction.presentation.sendPaidMessageStars {
+             return strings().messagePlaceholderPaidMessage(strings().starListItemCountOther(Int(amount.value)))
+         }
++
++        if let channel = chatInteraction.presentation.peer as? TelegramChannel, channel.sendPaidMessageStars != nil, let tagPerks = channel.activeTagPerks(timestamp: Int32(Date().timeIntervalSince1970)), tagPerks.freeMessages {
++            if let messagesLeft = tagPerks.messagesLeft {
++                return strings().blueTagPlaceholderLeft("\(messagesLeft)")
++            } else {
++                return strings().blueTagPlaceholder
++            }
++        }
+         
+         if case let .thread(mode) = chatInteraction.mode {
+             switch mode {
+diff --git a/packages/ChatUI/Sources/ChatUI/ChatPresentationInterfaceState.swift b/packages/ChatUI/Sources/ChatUI/ChatPresentationInterfaceState.swift
+index 00a16b7..ca9812d 100644
+--- a/packages/ChatUI/Sources/ChatUI/ChatPresentationInterfaceState.swift
++++ b/packages/ChatUI/Sources/ChatUI/ChatPresentationInterfaceState.swift
+@@ -569,6 +569,9 @@ public class ChatPresentationInterfaceState: Equatable {
+     
+     
+     public var sendPaidMessageStars: StarsAmount? {
++        if let peer = peer as? TelegramChannel, let tagPerks = peer.activeTagPerks(timestamp: Int32(Date().timeIntervalSince1970)), tagPerks.freeMessages {
++            return nil
++        }
+         if let _sendPaidMessageStars {
+             return _sendPaidMessageStars.value > 0 ? _sendPaidMessageStars : nil
+         } else if let cachedData = cachedData as? CachedUserData {
+diff --git a/packages/ChatUI/Sources/ChatUI/ChatRowItem.swift b/packages/ChatUI/Sources/ChatUI/ChatRowItem.swift
+index bd6d71b..df044ca 100644
+--- a/packages/ChatUI/Sources/ChatUI/ChatRowItem.swift
++++ b/packages/ChatUI/Sources/ChatUI/ChatRowItem.swift
+@@ -2543,6 +2543,8 @@ public class ChatRowItem: TableRowItem {
+                                 badgeColor = premiumGradient[1]
+                             case .admin:
+                                 badgeColor = theme.colors.greenUI
++                            case .blue:
++                                badgeColor = theme.colors.peerAvatarBlueBottom
+                             case .none:
+                                 badgeColor = !hasBubble ? theme.colors.grayText : theme.chat.grayText(isIncoming, object.renderType == .bubble)
+                             }
+diff --git a/packages/EditTagLabelUI/Sources/EditTagLabelUI/UserTagInfoModalController.swift b/packages/EditTagLabelUI/Sources/EditTagLabelUI/UserTagInfoModalController.swift
+index f715fc2..8f00d1b 100644
+--- a/packages/EditTagLabelUI/Sources/EditTagLabelUI/UserTagInfoModalController.swift
++++ b/packages/EditTagLabelUI/Sources/EditTagLabelUI/UserTagInfoModalController.swift
+@@ -140,6 +140,9 @@ private final class UserTagPreviewItem: GeneralRowItem {
+         case .admin:
+             rightColor = theme.colors.greenUI.darker()
+             rightText = " \(strings().userTagInfoAdminTag) "
++        case .blue:
++            rightColor = theme.colors.peerAvatarBlueBottom
++            rightText = " \(strings().blueTagSection) "
+         case .none:
+             rightColor = theme.colors.greenUI.darker()
+             rightText = " \(strings().userTagInfoAdminTag) "
+@@ -399,6 +402,8 @@ private func entries(_ state: State, arguments: Arguments, config: UserTagInfoCo
+         headerColor = premiumGradient[1]
+     case .admin:
+         headerColor = theme.colors.greenUI
++    case .blue:
++        headerColor = theme.colors.peerAvatarBlueBottom
+     case .none:
+         headerColor = theme.colors.grayIcon
+     }
+@@ -417,6 +422,8 @@ private func entries(_ state: State, arguments: Arguments, config: UserTagInfoCo
+         title = strings().userTagInfoOwner
+     case .admin:
+         title = strings().userTagInfoAdmin
++    case .blue:
++        title = strings().blueTagInfoTitle
+     case .none:
+         title = strings().userTagInfoMember
+     }
+@@ -436,6 +443,10 @@ private func entries(_ state: State, arguments: Arguments, config: UserTagInfoCo
+         tagBadgeColor = theme.colors.greenUI.darker()
+         tagBgColor = theme.colors.greenUI
+         _ = descAttr.append(string: strings().userTagInfoThisGreenTag, color: theme.colors.grayText, font: .normal(.text))
++    case .blue:
++        tagBadgeColor = theme.colors.peerAvatarBlueBottom
++        tagBgColor = theme.colors.peerAvatarBlueBottom
++        _ = descAttr.append(string: strings().blueTagInfoThisTag, color: theme.colors.grayText, font: .normal(.text))
+     case .none:
+         tagBadgeColor = theme.colors.grayText
+         tagBgColor = nil
+@@ -448,6 +459,8 @@ private func entries(_ state: State, arguments: Arguments, config: UserTagInfoCo
+         _ = descAttr.append(string: strings().userTagInfoOwnerTagDesc(config.authorName, config.groupName), color: theme.colors.grayText, font: .normal(.text))
+     case .admin:
+         _ = descAttr.append(string: strings().userTagInfoAdminTagDesc(config.authorName, config.groupName), color: theme.colors.grayText, font: .normal(.text))
++    case .blue:
++        _ = descAttr.append(string: strings().blueTagInfoDesc(config.authorName, config.groupName), color: theme.colors.grayText, font: .normal(.text))
+     case .none:
+         _ = descAttr.append(string: strings().userTagInfoCustomTagDesc(config.authorName, config.groupName), color: theme.colors.grayText, font: .normal(.text))
+     }
+diff --git a/packages/Localization/Sources/Localization/Localizable.swift b/packages/Localization/Sources/Localization/Localizable.swift
+index c1f8e54..335ccd6 100644
+--- a/packages/Localization/Sources/Localization/Localizable.swift
++++ b/packages/Localization/Sources/Localization/Localizable.swift
+@@ -975,6 +975,54 @@ public final class L10n {
+   public static var avatarBackgroundPatters: String  { return L10n.tr("Localizable", "Avatar.Background.Patters") }
+   /// PLAIN GRADIENT
+   public static var avatarBackgroundPlainGradient: String  { return L10n.tr("Localizable", "Avatar.Background.PlainGradient") }
++  /// Blue Tag
++  public static var blueTagSection: String  { return L10n.tr("Localizable", "BlueTag.Section") }
++  /// Free Messages
++  public static var blueTagFreeMessages: String  { return L10n.tr("Localizable", "BlueTag.FreeMessages") }
++  /// %@ can write without paying Stars. No admin rights are given.
++  public static func blueTagInfo(_ p1: String) -> String {
++    return L10n.tr("Localizable", "BlueTag.Info", p1)
++  }
++  /// Personal Slow Mode
++  public static var blueTagSlowMode: String  { return L10n.tr("Localizable", "BlueTag.SlowMode") }
++  /// Duration
++  public static var blueTagDuration: String  { return L10n.tr("Localizable", "BlueTag.Duration") }
++  /// Message Limit
++  public static var blueTagLimit: String  { return L10n.tr("Localizable", "BlueTag.Limit") }
++  /// Off
++  public static var blueTagOff: String  { return L10n.tr("Localizable", "BlueTag.Off") }
++  /// %@s
++  public static func blueTagSecondsShort(_ p1: String) -> String {
++    return L10n.tr("Localizable", "BlueTag.SecondsShort", p1)
++  }
++  /// %@m
++  public static func blueTagMinutesShort(_ p1: String) -> String {
++    return L10n.tr("Localizable", "BlueTag.MinutesShort", p1)
++  }
++  /// 1 day
++  public static var blueTagDay1: String  { return L10n.tr("Localizable", "BlueTag.Day1") }
++  /// 7 days
++  public static var blueTagDays7: String  { return L10n.tr("Localizable", "BlueTag.Days7") }
++  /// Forever
++  public static var blueTagForever: String  { return L10n.tr("Localizable", "BlueTag.Forever") }
++  /// No limit
++  public static var blueTagNoLimit: String  { return L10n.tr("Localizable", "BlueTag.NoLimit") }
++  /// Free · %@ left
++  public static func blueTagPlaceholderLeft(_ p1: String) -> String {
++    return L10n.tr("Localizable", "BlueTag.PlaceholderLeft", p1)
++  }
++  /// Free Message
++  public static var blueTagPlaceholder: String  { return L10n.tr("Localizable", "BlueTag.Placeholder") }
++  /// Blue tag saved
++  public static var blueTagSaved: String  { return L10n.tr("Localizable", "BlueTag.Saved") }
++  /// Blue Tag
++  public static var blueTagInfoTitle: String  { return L10n.tr("Localizable", "BlueTag.Info.Title") }
++  /// This blue tag 
++  public static var blueTagInfoThisTag: String  { return L10n.tr("Localizable", "BlueTag.Info.ThisTag") }
++  ///  is %1$@'s blue tag in %2$@. %1$@ can write for free, with a personal slow mode.
++  public static func blueTagInfoDesc(_ p1: String, _ p2: String) -> String {
++    return L10n.tr("Localizable", "BlueTag.Info.Desc", p1, p2)
++  }
+   /// Settings…
+   public static var bofnm1cWTitle: String  { return L10n.tr("Localizable", "BOF-NM-1cW.title") }
+   /// NEW
+diff --git a/packages/PeerModerationUI/Sources/PeerModerationUI/ChannelParticipantController.swift b/packages/PeerModerationUI/Sources/PeerModerationUI/ChannelParticipantController.swift
+index 22d87db..cb2ffd1 100644
+--- a/packages/PeerModerationUI/Sources/PeerModerationUI/ChannelParticipantController.swift
++++ b/packages/PeerModerationUI/Sources/PeerModerationUI/ChannelParticipantController.swift
+@@ -24,6 +24,75 @@ private let _id_tag_info = InputDataIdentifier("_id_tag_info")
+ private let _id_permissions = InputDataIdentifier("_id_permissions")
+ private let _id_promote = InputDataIdentifier("_id_promote")
+ private let _id_remove = InputDataIdentifier("_id_remove")
++private let _id_blue_tag = InputDataIdentifier("_id_blue_tag")
++private let _id_blue_tag_free = InputDataIdentifier("_id_blue_tag_free")
++private let _id_blue_tag_slowmode = InputDataIdentifier("_id_blue_tag_slowmode")
++private let _id_blue_tag_duration = InputDataIdentifier("_id_blue_tag_duration")
++private let _id_blue_tag_limit = InputDataIdentifier("_id_blue_tag_limit")
++
++private let blueTagSlowModeOptions: [Int32] = [0, 10, 30, 60, 300]
++private let blueTagDurationOptions: [Int32] = [86400, 7 * 86400, 0]
++private let blueTagLimitOptions: [Int32] = [10, 50, 0]
++
++private struct BlueTagDraft: Equatable {
++    var isEnabled: Bool = false
++    var freeMessages: Bool = true
++    var slowModeIndex: Int = 2
++    var durationIndex: Int = 1
++    var limitIndex: Int = 1
++
++    init() {
++    }
++
++    init(perks: TelegramChatMemberTagPerks, timestamp: Int32) {
++        self.isEnabled = true
++        self.freeMessages = perks.freeMessages
++        self.slowModeIndex = blueTagSlowModeOptions.firstIndex(of: perks.slowmodeSeconds) ?? 2
++        if perks.untilDate == 0 {
++            self.durationIndex = 2
++        } else {
++            self.durationIndex = perks.untilDate - timestamp > 86400 ? 1 : 0
++        }
++        self.limitIndex = blueTagLimitOptions.firstIndex(of: perks.messagesLimit) ?? 1
++    }
++
++    func perks(timestamp: Int32) -> TelegramChatMemberTagPerks? {
++        guard self.isEnabled else {
++            return nil
++        }
++        let duration = blueTagDurationOptions[self.durationIndex]
++        return TelegramChatMemberTagPerks(
++            freeMessages: self.freeMessages,
++            slowmodeSeconds: blueTagSlowModeOptions[self.slowModeIndex],
++            untilDate: duration == 0 ? 0 : timestamp + duration,
++            messagesLimit: blueTagLimitOptions[self.limitIndex]
++        )
++    }
++}
++
++private func blueTagSlowModeTitle(_ seconds: Int32) -> String {
++    if seconds == 0 {
++        return strings().blueTagOff
++    } else if seconds < 60 {
++        return strings().blueTagSecondsShort("\(seconds)")
++    } else {
++        return strings().blueTagMinutesShort("\(seconds / 60)")
++    }
++}
++
++private func blueTagDurationTitle(_ duration: Int32) -> String {
++    if duration == 0 {
++        return strings().blueTagForever
++    } else if duration == 86400 {
++        return strings().blueTagDay1
++    } else {
++        return strings().blueTagDays7
++    }
++}
++
++private func blueTagLimitTitle(_ limit: Int32) -> String {
++    return limit == 0 ? strings().blueTagNoLimit : "\(limit)"
++}
+ 
+ private final class Arguments {
+     let context: any AccountContextProtocol
+@@ -33,7 +102,8 @@ private final class Arguments {
+     let remove: (ChannelParticipant) -> Void
+     let updateTag: (String) -> Void
+     let openPermissions: (ChannelParticipant) -> Void
+-    init(context: any AccountContextProtocol, peerId: PeerId, promote: @escaping(ChannelParticipant) -> Void, restrict: @escaping(ChannelParticipant) -> Void, remove: @escaping(ChannelParticipant) -> Void, updateTag: @escaping(String) -> Void, openPermissions: @escaping(ChannelParticipant) -> Void) {
++    let updateBlueTag: ((inout BlueTagDraft) -> Void) -> Void
++    init(context: any AccountContextProtocol, peerId: PeerId, promote: @escaping(ChannelParticipant) -> Void, restrict: @escaping(ChannelParticipant) -> Void, remove: @escaping(ChannelParticipant) -> Void, updateTag: @escaping(String) -> Void, openPermissions: @escaping(ChannelParticipant) -> Void, updateBlueTag: @escaping((inout BlueTagDraft) -> Void) -> Void) {
+         self.context = context
+         self.peerId = peerId
+         self.promote = promote
+@@ -41,6 +111,7 @@ private final class Arguments {
+         self.remove = remove
+         self.updateTag = updateTag
+         self.openPermissions = openPermissions
++        self.updateBlueTag = updateBlueTag
+     }
+ }
+ 
+@@ -52,6 +123,8 @@ private struct State : Equatable {
+     var tag: String
+     var initialTag: String
+     var defaultBannedRights: TelegramChatBannedRights?
++    var blueTag = BlueTagDraft()
++    var initialBlueTag = BlueTagDraft()
+ }
+ 
+ // MARK: - Tag Preview
+@@ -158,6 +231,16 @@ private final class TagPreviewRowView: GeneralContainableRowView {
+     }
+ }
+ 
++private func canEditBlueTag(channel: TelegramChannel, participant: ChannelParticipant, peerId: PeerId, accountPeerId: PeerId) -> Bool {
++    guard case .group = channel.info, channel.hasPermission(.banMembers), peerId != accountPeerId else {
++        return false
++    }
++    if case .creator = participant {
++        return false
++    }
++    return participant.adminInfo == nil
++}
++
+ private func entries(_ state: State, arguments: Arguments) -> [InputDataEntry] {
+     var entries:[InputDataEntry] = []
+ 
+@@ -179,9 +262,9 @@ private func entries(_ state: State, arguments: Arguments) -> [InputDataEntry] {
+     } else {
+         isCreatorParticipant = false
+     }
+-    let rankType: AdminBadgeType = isCreatorParticipant ? .owner : (state.participant.adminInfo != nil ? .admin : .none)
++    let rankType: AdminBadgeType = isCreatorParticipant ? .owner : (state.participant.adminInfo != nil ? .admin : (state.blueTag.isEnabled ? .blue : .none))
+ 
+-    entries.append(.custom(sectionId: sectionId, index: index, value: .none, identifier: _id_tag_preview, equatable: InputDataEquatable(state.tag), comparable: nil, item: { initialSize, stableId in
++    entries.append(.custom(sectionId: sectionId, index: index, value: .none, identifier: _id_tag_preview, equatable: InputDataEquatable("\(state.tag)|\(state.blueTag.isEnabled)"), comparable: nil, item: { initialSize, stableId in
+         return TagPreviewRowItem(initialSize, stableId: stableId, context: arguments.context, peer: peer, tag: state.tag, rankType: rankType, viewType: .firstItem)
+     }))
+     index += 1
+@@ -198,6 +281,48 @@ private func entries(_ state: State, arguments: Arguments) -> [InputDataEntry] {
+     entries.append(.sectionId(sectionId, type: .normal))
+     sectionId += 1
+ 
++    if canEditBlueTag(channel: channel, participant: state.participant, peerId: peer.id, accountPeerId: arguments.context.peerId) {
++        let blueTag = state.blueTag
++        entries.append(.general(sectionId: sectionId, index: index, value: .none, error: nil, identifier: _id_blue_tag, data: InputDataGeneralData(name: strings().blueTagSection, color: theme.colors.peerAvatarBlueBottom, type: .switchable(blueTag.isEnabled), viewType: blueTag.isEnabled ? .firstItem : .singleItem, action: {
++            arguments.updateBlueTag { $0.isEnabled = !$0.isEnabled }
++        })))
++        index += 1
++
++        if blueTag.isEnabled {
++            entries.append(.general(sectionId: sectionId, index: index, value: .none, error: nil, identifier: _id_blue_tag_free, data: InputDataGeneralData(name: strings().blueTagFreeMessages, color: theme.colors.text, type: .switchable(blueTag.freeMessages), viewType: .innerItem, action: {
++                arguments.updateBlueTag { $0.freeMessages = !$0.freeMessages }
++            })))
++            index += 1
++
++            entries.append(.general(sectionId: sectionId, index: index, value: .none, error: nil, identifier: _id_blue_tag_slowmode, data: InputDataGeneralData(name: strings().blueTagSlowMode, color: theme.colors.text, type: .contextSelector(blueTagSlowModeTitle(blueTagSlowModeOptions[blueTag.slowModeIndex]), blueTagSlowModeOptions.enumerated().map { index, value in
++                return ContextMenuItem(blueTagSlowModeTitle(value), handler: {
++                    arguments.updateBlueTag { $0.slowModeIndex = index }
++                })
++            }), viewType: .innerItem)))
++            index += 1
++
++            entries.append(.general(sectionId: sectionId, index: index, value: .none, error: nil, identifier: _id_blue_tag_duration, data: InputDataGeneralData(name: strings().blueTagDuration, color: theme.colors.text, type: .contextSelector(blueTagDurationTitle(blueTagDurationOptions[blueTag.durationIndex]), blueTagDurationOptions.enumerated().map { index, value in
++                return ContextMenuItem(blueTagDurationTitle(value), handler: {
++                    arguments.updateBlueTag { $0.durationIndex = index }
++                })
++            }), viewType: .innerItem)))
++            index += 1
++
++            entries.append(.general(sectionId: sectionId, index: index, value: .none, error: nil, identifier: _id_blue_tag_limit, data: InputDataGeneralData(name: strings().blueTagLimit, color: theme.colors.text, type: .contextSelector(blueTagLimitTitle(blueTagLimitOptions[blueTag.limitIndex]), blueTagLimitOptions.enumerated().map { index, value in
++                return ContextMenuItem(blueTagLimitTitle(value), handler: {
++                    arguments.updateBlueTag { $0.limitIndex = index }
++                })
++            }), viewType: .lastItem)))
++            index += 1
++
++            entries.append(.desc(sectionId: sectionId, index: index, text: .plain(strings().blueTagInfo(peer.compactDisplayTitle)), data: InputDataGeneralTextData(viewType: .textBottomItem)))
++            index += 1
++        }
++
++        entries.append(.sectionId(sectionId, type: .normal))
++        sectionId += 1
++    }
++
+     let isAdmin = state.participant.adminInfo != nil
+     let isCreator = isCreatorParticipant
+ 
+@@ -364,8 +489,27 @@ public func ChannelParticipantController<Context: AccountContextProtocol>(contex
+         }
+     }, openPermissions: { participant in
+         openRestrictions(participant)
++    }, updateBlueTag: { f in
++        updateState { state in
++            var state = state
++            f(&state.blueTag)
++            return state
++        }
+     })
+ 
++    actionsDisposable.add((context.engine.peers.chatMemberTagPerks(peerId: peerId, userId: participant.peer.id) |> deliverOnMainQueue).start(next: { perks in
++        let timestamp = Int32(Date().timeIntervalSince1970)
++        guard let perks, perks.isActive(timestamp: timestamp) else {
++            return
++        }
++        updateState { state in
++            var state = state
++            state.blueTag = BlueTagDraft(perks: perks, timestamp: timestamp)
++            state.initialBlueTag = state.blueTag
++            return state
++        }
++    }))
++
+     let signal = statePromise.get() |> filter { $0.channel != nil } |> deliverOnPrepareQueue |> map { state in
+         return InputDataSignalValue(entries: entries(state, arguments: arguments))
+     }
+@@ -390,16 +534,39 @@ public func ChannelParticipantController<Context: AccountContextProtocol>(contex
+         defer { presentation.end() }
+         let state = stateValue.with { $0 }
+         let tag = state.tag.trimmingCharacters(in: .whitespacesAndNewlines)
++        let blueTagChanged = state.blueTag != state.initialBlueTag
++        if blueTagChanged, state.blueTag.isEnabled, tag.isEmpty {
++            return .fail(.fields([_id_tag_input: .shake]))
++        }
++        let savePerks: () -> Void = {
++            guard blueTagChanged else {
++                return
++            }
++            let perks = state.blueTag.perks(timestamp: Int32(Date().timeIntervalSince1970))
++            actionsDisposable.add(origin.preservingPresentation(context.engine.peers.updateChatMemberTagPerks(peerId: peerId, userId: participant.peer.id, perks: perks) |> deliverOnMainQueue).start(error: { _ in
++                showModalText(for: context.window, text: strings().channelParticipantTagUpdateError)
++            }, completed: {
++                if perks != nil {
++                    showModalText(for: context.window, text: strings().blueTagSaved)
++                }
++            }))
++        }
+         if tag != state.initialTag {
+             let signal = showModalProgress(signal: context.peerChannelMemberCategoriesContextsManager.updateChatRank(peerId: peerId, memberId: participant.peer.id, rank: tag.isEmpty ? nil : tag, participant: participant), for: context.window) |> deliverOnMainQueue
+             actionsDisposable.add(origin.preservingPresentation(signal).start(error: { _ in
+                 showModalText(for: context.window, text: strings().channelParticipantTagUpdateError)
+             }, completed: {
++                savePerks()
+                 close?()
+-                showModalText(for: context.window, text: strings().channelParticipantTagUpdated)
++                if !blueTagChanged {
++                    showModalText(for: context.window, text: strings().channelParticipantTagUpdated)
++                }
+             }))
+             return .fail(.none)
+         }
++        if blueTagChanged {
++            savePerks()
++        }
+         close?()
+         return .fail(.none)
+     }
+@@ -428,7 +595,7 @@ public func ChannelParticipantController<Context: AccountContextProtocol>(contex
+         }
+     }
+ 
+-    let modalController = InputDataModalController(controller, modalInteractions: modalInteractions, size: NSMakeSize(350, 350))
++    let modalController = InputDataModalController(controller, modalInteractions: modalInteractions, size: NSMakeSize(350, 500))
+     modalController.analyticsContext = origin
+ 
+     controller.leftModalHeader = ModalHeaderData(image: theme.icons.modalClose, handler: { [weak modalController] in

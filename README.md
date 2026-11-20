@@ -35,6 +35,7 @@ No admin rights are given. When the perks run out, the tag stays and turns gray 
 | **Telegram Web K** (tweb) | `web-k.patch` | Same, plus Recent Actions entries and the Tag Info popup | `tsc`, unit tests, rendered in the popup sandbox (screenshot above) |
 | **Android** | `android.patch` | TLRPC classes (old constructors still parse), Blue Tag section in the tag sheet, blue tag in bubbles, free sending, placeholder, personal slow mode | syntax check (the app is built with the Android SDK) |
 | **iOS** | `ios.patch` | `swift_scheme.tl`, `TelegramChannel.tagPerks` (Postbox + FlatBuffers), engine methods, Blue Tag section in the tag sheet, blue tag in bubbles, free sending, placeholder, personal slow mode | syntax check (the app is built with Xcode/Bazel) |
+| **macOS** (telegram-macos) | `macos.patch` + `ios.patch` in `submodules/telegram-ios` | Blue Tag section in the member screen, blue badge in messages and in Tag Info, free sending, placeholder `Free · N left`; data and API come from TelegramCore (`ios.patch`), personal slow mode too | syntax check (the app is built with Xcode) |
 | **Desktop** (tdesktop) | `desktop.patch` | `api.tl`, `ChannelData` perks, Blue Tag section in Edit tag, blue badge, free sending, personal slow mode | syntax check (the app is built with Qt and its submodules) |
 
 The patch for each client is made against the latest commit at the time of writing (see `scripts/apply.sh`).
@@ -42,7 +43,7 @@ The patch for each client is made against the latest commit at the time of writi
 ## Apply
 
 ```bash
-scripts/apply.sh web-a        # or web-k, android, ios, desktop
+scripts/apply.sh web-a        # or web-k, android, ios, desktop, macos
 cd web-a && npm ci && npm run dev
 ```
 
@@ -80,9 +81,9 @@ blueTag.setMyPerks('-100…', { isFreeMessages: true, slowModeSeconds: 5, messag
 В репозитории:
 
 - **спецификация API** с TL-схемой: ID посчитаны тем же CRC32, что и у Telegram;
-- **патчи для 5 официальных клиентов**: Web A, Web K, Android, iOS и Desktop;
+- **патчи для 6 официальных клиентов**: Web A, Web K, Android, iOS, Desktop и macOS;
 - **скрипт `scripts/apply.sh`**: он клонирует клиент на нужном коммите, накладывает патч и создаёт ветку `blue-tag`.
 
-Web A и Web K собраны и проверены здесь: tsc, тесты, сборка, скриншот. Android, iOS и Desktop проверены на синтаксис: для их сборки нужны Android SDK, Xcode и Qt соответственно.
+Web A и Web K собраны и проверены здесь: tsc, тесты, сборка, скриншот. Android, iOS, Desktop и macOS проверены на синтаксис: для их сборки нужны Android SDK, Xcode и Qt.
 
 Concept & idea: **@information_balfikovich** · made with Claude
